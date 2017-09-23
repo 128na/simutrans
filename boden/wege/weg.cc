@@ -186,6 +186,18 @@ void weg_t::rdwr(loadsave_t *file)
 {
 	xml_tag_t t( file, "weg_t" );
 
+	if(  file->get_version() == 120006  ) {
+		strasse_t* str = NULL;
+		if(  get_waytype()==road_wt  ) str = (strasse_t*) this;
+		uint8 mask_oneway = str?str->get_ribi_mask_oneway():0;
+		file->rdwr_byte(mask_oneway);
+		if(str) str->set_ribi_mask_oneway(mask_oneway);
+		sint8 ov = str?str->get_overtaking_mode():0;
+		file->rdwr_byte(ov);
+		overtaking_mode_t nov = (overtaking_mode_t)ov;
+		if(str) str->set_overtaking_mode(nov);
+	}
+
 	// save owner
 	if(  file->get_version() >= 99006  ) {
 		sint8 spnum=get_player_nr();
