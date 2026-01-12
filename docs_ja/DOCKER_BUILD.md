@@ -234,6 +234,101 @@ docker system prune -a
 docker builder prune
 ```
 
+## アプリケーション側の修正
+
+Docker 環境でのビルドを実現するため、以下の修正が Simutrans のソースコードに加えられました。
+
+### 1. Dockerfile に libexpat1-dev を追加
+
+fontconfig が libexpat に依存しているため、静的リンク時にシンボルが解決されないエラーが発生していました。
+
+**修正内容**:
+
+```dockerfile
+RUN apt-get update && apt-get install -y \
+    ...
+    libexpat1-dev \  # 追加
+    ...
+```
+
+**理由**: fontconfig ライブラリが XML パース機能で libexpat を使用しており、明示的にインストールする必要があります。
+
+### 2. configure.ac での fontconfig 検索時に -lexpat を追加
+
+fontconfig を検索する際に、依存関係である libexpat を明示的にリンクするよう修正しました。
+
+**修正内容**:
+
+```autoconf
+# fontconfig オプション検索
+AC_SEARCH_LIBS(FcInitLoadConfigAndFonts, fontconfig,
+    [AC_SUBST(fontconfig, 1)],
+    [AC_SUBST(fontconfig, 0)],
+    [-lfontconfig -lexpat])  # 修正: -lexpat を追加
+```
+
+**理由**: configure スクリプトが fontconfig ライブラリをテストする際に、その依存関係も含めてリンクする必要があります。
+
+### 3. Makefile での静的リンク時のオプション修正
+
+Linux 環境では `pkg-config --libs --static` を使用して、すべての依存関係を正しく解決するよう修正しました。
+
+**修正内容**:
+
+```makefile
+ifdef USE_FONTCONFIG
+  ifeq ($(shell expr $(USE_FONTCONFIG) \>= 1), 1)
+    CFLAGS  += -DUSE_FONTCONFIG
+    CFLAGS  += $(shell $(FONTCONFIG_CONFIG) --cflags)
+    ifeq ($(shell expr $(STATIC) \>= 1), 1)
+      LDFLAGS += $(shell $(FONTCONFIG_CONFIG) --libs --static)  # 修正
+    else
+      LDFLAGS += $(shell $(FONTCONFIG_CONFIG) --libs)
+    endif
+  endif
+endif
+```
+
+**理由**: 静的リンク時に、pkg-config の `--static` フラグを使用することで、libexpat を含むすべての依存ライブラリが正しくリンクされます。
+
+### 4. config.default.in での STATIC フラグを 0 に変更
+
+Linux 環境では完全な静的リンクが推奨されないため、デフォルト値を変更しました。
+
+**修正内容**:
+
+```makefile
+# Before:
+STATIC := 1   # Enable static linkage
+
+# After:
+STATIC := 0   # Enable static linkage (disabled for Linux)
+```
+
+**理由**:
+
+- Linux では glibc の動的リンク機能（`_dl_x86_cpu_features` など）に依存しており、完全な静的リンクは問題を引き起こします
+- 動的リンクを使用することで、メンテナンス性と互換性が向上します
+- Docker 環境では、必要なライブラリがすべてコンテナ内に含まれるため、静的リンクの利点が限定的です
+
+### 修正の検証
+
+以下のコマンドで正常にビルドできることを確認できます：
+
+```bash
+docker-compose build
+docker-compose run --rm simutrans-build docker-build.sh make
+
+# 実行ファイルが生成されたことを確認
+docker-compose run --rm simutrans-build ls -lh /simutrans/sim
+```
+
+成功時の出力例:
+
+```
+-rwxr-xr-x 1 root root 7.9M Jan 12 08:22 /simutrans/sim
+```
+
 ## 高度な使い方
 
 ### カスタムビルド引数

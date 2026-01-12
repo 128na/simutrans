@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     libbz2-dev \
     libsdl2-dev \
+    libexpat1-dev \
     # オプションライブラリ
     libzstd-dev \
     libminiupnpc-dev \

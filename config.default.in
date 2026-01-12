@@ -26,7 +26,7 @@ OPTIMISE := 1 # Add umpteen optimisation flags
 #PROFILE := 1  # Enable profiling
 #PROFILE := 2  # Enable profiling with optimisation flags, can be used with `OPTIMISE = 1'
 
-STATIC := 1   # Enable static linkage (to be at least somewhat portable), Freetype and SDL only for non-MinGW OSTYPE.
+STATIC := 0   # Enable static linkage (to be at least somewhat portable), Freetype and SDL only for non-MinGW OSTYPE.
 AV_FOUNDATION := @av_foundation@  # Use AVFoundation instead of QTKit. If you are building on macOS 10.12 or later, this must be enabled.
 
 WITH_REVISION := @svn@ # adds the revision from svn; required for networkgames
