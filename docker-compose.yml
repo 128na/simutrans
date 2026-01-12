@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  simutrans-build:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: simutrans-build:latest
+    container_name: simutrans-build
+    volumes:
+      # ソースコードをマウント
+      - .:/simutrans
+      # ビルド成果物を永続化（オプション）
+      - build-cache:/simutrans/build
+    working_dir: /simutrans
+    # インタラクティブモード
+    stdin_open: true
+    tty: true
+    # 環境変数
+    environment:
+      - MAKEFLAGS=-j$(nproc)
+    # コンテナ起動時のコマンド
+    command: /bin/bash
+
+  # 開発環境用（VSCodeのDevContainerなど）
+  simutrans-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: simutrans-build:latest
+    container_name: simutrans-dev
+    volumes:
+      - .:/simutrans
+      - build-cache:/simutrans/build
+      # Git設定を共有（オプション）
+      - ~/.gitconfig:/root/.gitconfig:ro
+    working_dir: /simutrans
+    stdin_open: true
+    tty: true
+    environment:
+      - MAKEFLAGS=-j$(nproc)
+    command: /bin/bash
+
+volumes:
+  build-cache:

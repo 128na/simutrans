@@ -1,0 +1,50 @@
+# ビルド成果物
+build/
+*.o
+*.a
+*.so
+*.dll
+*.exe
+sim
+nettool
+makeobj
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 一時ファイル
+*.log
+*.tmp
+*.bak
+
+# キャッシュ
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+
+# 設定ファイル（生成される）
+config.default
+config.log
+
+# ドキュメント生成
+documentation/html/
+documentation/latex/
+
+# Pakset（大きいファイル）
+simutrans/pak*/
+
+# テスト
+*.test
+test_output/

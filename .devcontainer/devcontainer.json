@@ -1,0 +1,41 @@
+{
+  "name": "Simutrans Development",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "simutrans-dev",
+  "workspaceFolder": "/simutrans",
+
+  // VSCode設定
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools",
+        "ms-vscode.makefile-tools",
+        "ms-azuretools.vscode-docker",
+        "eamodio.gitlens"
+      ],
+      "settings": {
+        "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+        "cmake.buildDirectory": "${workspaceFolder}/build",
+        "files.associations": {
+          "*.h": "cpp",
+          "*.cc": "cpp"
+        }
+      }
+    }
+  },
+
+  // コンテナ起動後に実行するコマンド
+  "postCreateCommand": "echo 'Simutrans development environment ready!'",
+
+  // ポートフォワーディング（ネットワークゲーム用）
+  "forwardPorts": [13353],
+
+  // rootユーザーとして実行（ビルドツール用）
+  "remoteUser": "root",
+
+  // 環境変数
+  "remoteEnv": {
+    "MAKEFLAGS": "-j$(nproc)"
+  }
+}
