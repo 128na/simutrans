@@ -41,5 +41,24 @@ services:
       - MAKEFLAGS=-j$(nproc)
     command: /bin/bash
 
+  # MinGW クロスコンパイル環境（Windows用バイナリ生成）
+  simutrans-mingw:
+    build:
+      context: .
+      dockerfile: Dockerfile.mingw
+    image: simutrans-mingw:latest
+    container_name: simutrans-mingw
+    volumes:
+      - .:/simutrans
+      - mingw-build-cache:/simutrans/build-mingw
+    working_dir: /simutrans
+    stdin_open: true
+    tty: true
+    environment:
+      - MAKEFLAGS=-j$(nproc)
+      - OSTYPE=mingw
+    command: /bin/bash
+
 volumes:
   build-cache:
+  mingw-build-cache:

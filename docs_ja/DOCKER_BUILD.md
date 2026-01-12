@@ -101,6 +101,158 @@ cmake -DCMAKE_BUILD_TYPE=Release -DSIMUTRANS_BACKEND=sdl2 ..
 cmake --build . -j$(nproc)
 ```
 
+## Windows でのビルド
+
+### 方法 A: Docker で MinGW クロスコンパイル（推奨）
+
+Docker 環境（Linux）から Windows 用バイナリ（.exe）を生成できます。
+
+#### 前提条件
+
+- Docker Desktop (Windows/Mac) または Docker Engine (Linux)
+- Docker Compose
+
+#### ビルド手順
+
+```bash
+# MinGWイメージをビルド（初回のみ）
+docker-compose build simutrans-mingw
+
+# Windows用バイナリをビルド
+docker-compose run --rm simutrans-mingw docker-build-mingw.sh make
+
+# または、コンテナに入って手動でビルド
+docker-compose run --rm simutrans-mingw bash
+# コンテナ内:
+./docker-build-mingw.sh make
+
+# ビルド成果物を確認
+ls -lh sim.exe
+```
+
+#### 生成されるファイル
+
+- **sim.exe** - Windows 用実行ファイル（64-bit）
+- プロジェクトルートに直接生成されます
+
+#### MinGW クロスコンパイルの利点
+
+✅ **クロスプラットフォーム**: Linux や macOS から Windows バイナリをビルド可能  
+✅ **環境の一貫性**: Docker コンテナで依存関係が完全に管理される  
+✅ **CI/CD 対応**: GitHub Actions などで自動ビルド可能  
+✅ **Windows 不要**: Windows マシンが不要でビルド可能
+
+#### 注意事項
+
+⚠️ MinGW でビルドされたバイナリは、Windows 用の依存 DLL が必要な場合があります。配布時は依存関係を確認してください。
+
+### 方法 B: Windows ネイティブビルド
+
+#### 前提条件
+
+- **vcpkg** (Microsoft の C++ パッケージ マネージャー)
+- **PowerShell** (ビルドスクリプト実行用)
+
+詳細は [DEVELOPMENT_SETUP.md](DEVELOPMENT_SETUP.md) の Windows セクションを参照してください。
+
+### ビルド方法
+
+#### 方法 1: Visual Studio から直接ビルド
+
+1. Simutrans.sln を Visual Studio で開く
+2. プロジェクトを選択：
+   - **Simutrans-GDI** : Windows GDI (32-bit)
+   - **Simutrans-SDL2** : SDL2 (64-bit)
+3. Release 構成を選択
+4. Build → Build Solution を実行
+
+#### 方法 2: PowerShell スクリプト (推奨)
+
+```powershell
+# PowerShell を「管理者として実行」で開く
+
+# vcpkg のセットアップ
+git clone https://github.com/Microsoft/vcpkg.git
+cd vcpkg
+.\bootstrap-vcpkg.bat
+.\vcpkg integrate install
+cd ..
+
+# MSBuild でビルド（32-bit GDI）
+msbuild /m .\Simutrans-GDI.vcxproj -p:Configuration=Release /p:platform=Win32
+
+# または、64-bit SDL2
+msbuild /m .\Simutrans-SDL2.vcxproj -p:Configuration=Release /p:platform=x64
+
+# ビルドファイルの確認
+# build/GDI/Simutrans GDI Nightly.exe    (32-bit GDI版)
+# build/SDL2/Simutrans SDL2 Nightly.exe  (64-bit SDL2版)
+```
+
+#### 方法 3: GitHub Actions ワークフロー（CI/CD）
+
+プロジェクトには自動ビルドワークフローが含まれています：
+
+- `.github/workflows/nightly-windows-ms.yml` - 32-bit GDI 版
+- `.github/workflows/nightly-windows64-SDL2-ms.yml` - 64-bit SDL2 版
+
+これらはプッシュ時に自動実行され、リリースファイルが生成されます。
+
+### Windows ビルドの詳細
+
+#### バックエンド選択
+
+| バックエンド | プロジェクト           | ビット数 | 用途                                |
+| ------------ | ---------------------- | -------- | ----------------------------------- |
+| **GDI**      | Simutrans-GDI.vcxproj  | 32-bit   | 古い Windows との互換性が必要な場合 |
+| **SDL2**     | Simutrans-SDL2.vcxproj | 64-bit   | 推奨（より新しく、機能が豊富）      |
+
+#### vcpkg 依存関係
+
+Windows ビルドでは、vcpkg を通じて以下のライブラリが自動インストールされます：
+
+```
+- zlib
+- libpng
+- freetype
+- bzip2
+- zstd
+- miniupnpc
+- fluidsynth
+- fontconfig
+```
+
+詳細は `vcpkg.json` を参照してください。
+
+### トラブルシューティング (Windows)
+
+**vcpkg インストールエラー**
+
+```powershell
+# vcpkg キャッシュをクリア
+.\vcpkg remove '*' --outdated
+.\vcpkg update
+```
+
+**MSBuild が見つからない**
+
+```powershell
+# Visual Studio のインストール確認
+Get-Command msbuild
+
+# または、Visual Studio Installer から C++ ワークロードを追加
+```
+
+**ビルドファイルが見つからない**
+
+```powershell
+# 64-bit GDI 版（推奨）
+# build/GDI/Simutrans GDI Nightly.exe
+
+# または 32-bit SDL2 版
+# build/SDL2/Simutrans SDL2 Nightly.exe
+```
+
 ## docker-build.sh の使い方
 
 便利なビルドスクリプトが用意されています：

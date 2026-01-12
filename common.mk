@@ -53,4 +53,12 @@ $(BUILDDIR)/%.o: %.cc $(BUILDCONFIG_FILES)
 $(BUILDDIR)/%.o: %.rc $(BUILDCONFIG_FILES)
 	@echo "===> RES $<"
 #	$(Q)$(WINDRES) --preprocessor "$(HOSTCXX) -E -xc -DRC_INVOKED -MMD -MF $(@:%.o=%.d) -MT $@" -O COFF $< $@
-	$(Q)$(WINDRES) --preprocessor "$(HOSTCXX) -E -xc -DRC_INVOKED -MMD -MT $@" -O COFF $< $@
+	$(Q)$(WINDRES) \
+		--preprocessor "$(HOSTCXX)" \
+		--preprocessor-arg=-E \
+		--preprocessor-arg=-xc \
+		--preprocessor-arg=-DRC_INVOKED \
+		--preprocessor-arg=-MMD \
+		--preprocessor-arg=-MT \
+		--preprocessor-arg=$@ \
+		-O COFF $< $@
