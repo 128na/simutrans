@@ -1,0 +1,301 @@
+# Simutrans 開発者向けドキュメント
+
+このディレクトリには、Simutransプロジェクトの技術スタック、アーキテクチャ、開発環境に関するドキュメントが含まれています。
+
+## 📚 ドキュメント一覧
+
+### [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)
+**プロジェクト全体の概要**
+
+Simutransプロジェクトの基本情報、技術スタック、構造を説明しています。
+
+**内容:**
+- プロジェクトの背景と歴史
+- 使用している技術スタック（言語、ビルドシステム、ライブラリ）
+- ディレクトリ構成
+- ビルド方法の概要
+- 貢献方法
+- 関連リンク
+
+**対象読者:** 初めてSimutransのコードに触れる開発者
+
+---
+
+### [TECHNICAL_ARCHITECTURE.md](TECHNICAL_ARCHITECTURE.md)
+**技術アーキテクチャの詳細**
+
+Simutransの内部アーキテクチャとコードの構造を深く掘り下げています。
+
+**内容:**
+- システムアーキテクチャ概要
+- コアコンポーネント（ワールド、オブジェクト、車両など）
+- グラフィックス・UI・ネットワークシステム
+- データ管理とI/O
+- パフォーマンス最適化戦略
+- 拡張性とモジュール性
+
+**対象読者:** コードベースを理解したい開発者、機能を実装する開発者
+
+---
+
+### [DEVELOPMENT_SETUP.md](DEVELOPMENT_SETUP.md)
+**開発環境セットアップガイド**
+
+各プラットフォームでの開発環境の構築手順を詳しく説明しています。
+
+**内容:**
+- Windows（Visual Studio / MSYS2）
+- Linux（Ubuntu/Debian、Arch、Fedora）
+- macOS
+- CMakeの使用方法
+- IDE設定（VS Code、Visual Studio、CLion）
+- トラブルシューティング
+
+**対象読者:** 開発環境を構築したい開発者
+
+---
+
+### [DEPENDENCIES.md](DEPENDENCIES.md)
+**依存関係リファレンス**
+
+すべての依存ライブラリの詳細情報とインストール方法を提供しています。
+
+**内容:**
+- 必須ライブラリ（zlib、libpng、FreeType、SDL2など）
+- オプションライブラリ（zstd、miniUPnPc、FluidSynthなど）
+- プラットフォーム別インストール手順
+- vcpkg統合（Windows）
+- 依存関係マトリックス
+- ライセンス互換性
+- トラブルシューティング
+
+**対象読者:** ビルド環境を整備する開発者、依存関係の問題を解決したい開発者
+
+---
+
+## 🎯 クイックスタート
+
+### 完全な初心者向け
+
+1. **[PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)** を読んでプロジェクトを理解
+2. **[DEVELOPMENT_SETUP.md](DEVELOPMENT_SETUP.md)** に従って環境を構築
+3. コードを読み始める前に **[TECHNICAL_ARCHITECTURE.md](TECHNICAL_ARCHITECTURE.md)** でアーキテクチャを学習
+
+### 既に開発経験がある方
+
+1. **[DEVELOPMENT_SETUP.md](DEVELOPMENT_SETUP.md)** で環境を素早く構築
+2. **[PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)** のディレクトリ構成を確認
+3. **[TECHNICAL_ARCHITECTURE.md](TECHNICAL_ARCHITECTURE.md)** で関心のある部分を参照
+
+### 依存関係の問題が発生した場合
+
+1. **[DEPENDENCIES.md](DEPENDENCIES.md)** のトラブルシューティングセクションを確認
+2. 該当するライブラリのインストール手順を再確認
+3. それでも解決しない場合は[フォーラム](https://forum.simutrans.com/)で質問
+
+---
+
+## 📖 その他のドキュメント
+
+### プロジェクトルートの documentation/ ディレクトリ
+
+- **[about-the-code.txt](../documentation/about-the-code.txt)**: コードの基本構造とUI設計
+- **[coding_styles.txt](../documentation/coding_styles.txt)**: コーディング規約と命名規則
+- **[utf8-support.txt](../documentation/utf8-support.txt)**: UTF-8サポートの実装詳細
+
+### オンラインリソース
+
+#### Wiki
+- [Compiling Simutrans](https://simutrans-germany.com/wiki/wiki/en_CompilingSimutrans)
+- [Development Index](https://simutrans-germany.com/wiki/wiki/en_Devel_Index)
+- [Doxygen Documentation](https://simutrans-germany.com/wiki/wiki/en_Doxygen)
+
+#### フォーラム
+- [Technical Documentation](https://forum.simutrans.com/index.php/board,112.0.html)
+- [Patches & Projects](https://forum.simutrans.com/index.php/board,33.0.html)
+- [Help Center](https://forum.simutrans.com/index.php/board,7.0.html)
+
+---
+
+## 🛠️ 開発ワークフロー
+
+### 1. 準備
+
+```bash
+# リポジトリをクローン
+git clone https://github.com/simutrans/simutrans.git
+cd simutrans
+
+# ドキュメントを読む
+cd docs
+# PROJECT_OVERVIEW.md → DEVELOPMENT_SETUP.md → TECHNICAL_ARCHITECTURE.md
+```
+
+### 2. 環境構築
+
+```bash
+# プラットフォーム別のセットアップ
+# Linux:
+sudo ./tools/setup-debian.sh
+# macOS:
+brew install [依存関係]
+# Windows:
+# Visual Studio + vcpkg
+```
+
+### 3. ビルド
+
+```bash
+# Makeの場合
+autoconf
+./configure
+make -j$(nproc)
+
+# CMakeの場合
+cmake -B build
+cmake --build build -j$(nproc)
+```
+
+### 4. 実行
+
+```bash
+# Paksetをダウンロード
+./tools/get_pak.sh
+
+# 実行
+./build/default/sim
+```
+
+### 5. コード変更
+
+```bash
+# コーディング規約を確認
+cat documentation/coding_styles.txt
+
+# アーキテクチャを理解
+# docs/TECHNICAL_ARCHITECTURE.md を参照
+
+# コードを編集
+# テストビルド
+make -j$(nproc)
+```
+
+### 6. 貢献
+
+- **Pull Requestは使用しない**
+- [Patches & Projects フォーラム](https://forum.simutrans.com/index.php/board,33.0.html)にパッチを投稿
+
+---
+
+## 🔍 コードを読む際のヒント
+
+### 主要なエントリーポイント
+
+1. **src/simutrans/simmain.cc** - メイン関数、初期化処理
+2. **src/simutrans/world/simworld.cc** - ワールド管理、メインループ
+3. **src/simutrans/display/simgraph.h** - グラフィックス抽象レイヤー
+4. **src/simutrans/gui/gui_frame_t.h** - UI基底クラス
+
+### コード探索の順序
+
+1. **データ構造**: `src/simutrans/tpl/` でテンプレートライブラリを確認
+2. **基本オブジェクト**: `src/simutrans/obj/` でゲームオブジェクトを理解
+3. **システムコンポーネント**: 興味のあるシステム（vehicle/, network/, gui/など）を深掘り
+
+### デバッグのコツ
+
+```cpp
+// simdebug.hを使用
+#include "simdebug.h"
+
+dbg->message("tag", "Debug message: %d", value);
+dbg->warning("tag", "Warning!");
+dbg->error("tag", "Error!");
+```
+
+---
+
+## 💡 よくある質問
+
+### Q: どこから始めればいい？
+
+**A:** [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)を読んで全体像を把握し、[DEVELOPMENT_SETUP.md](DEVELOPMENT_SETUP.md)で環境を構築してください。
+
+### Q: コードが大きすぎて圧倒される
+
+**A:** [TECHNICAL_ARCHITECTURE.md](TECHNICAL_ARCHITECTURE.md)でアーキテクチャを理解し、興味のあるコンポーネント（例：vehicle/、gui/）から始めてください。
+
+### Q: ビルドエラーが出る
+
+**A:** [DEPENDENCIES.md](DEPENDENCIES.md)のトラブルシューティングセクションを確認するか、[フォーラム](https://forum.simutrans.com/)で質問してください。
+
+### Q: どうやって貢献できる？
+
+**A:** 
+1. コーディング: [Patches & Projects](https://forum.simutrans.com/index.php/board,33.0.html)
+2. 翻訳: [SimuTranslator](https://translator.simutrans.com/)
+3. グラフィック: [General Resources](https://forum.simutrans.com/index.php/board,108.0.html)
+4. バグ報告: [Bug Reports](https://forum.simutrans.com/index.php/board,8.0.html)
+
+### Q: Pull Requestは使えない？
+
+**A:** いいえ、Simutransプロジェクトはフォーラムベースの開発を行っています。パッチは[Patches & Projects フォーラム](https://forum.simutrans.com/index.php/board,33.0.html)に投稿してください。
+
+---
+
+## 🤝 コミュニティ
+
+### コミュニケーション
+
+- **国際フォーラム**: https://forum.simutrans.com/
+- **ドイツフォーラム**: https://www.simutrans-forum.de/
+- **日本フォーラム**: https://forum.japanese.simutrans.com/
+
+### 開発チーム
+
+- **リードメンテナ**: Markus Pristovsek "Prissi"
+- **創始者**: Hansjörg Malthaner "Hajo" (1997-2004)
+- **貢献者**: [thanks.txt](../simutrans/thanks.txt)を参照
+
+### サポート
+
+- **技術的な質問**: [Technical Documentation フォーラム](https://forum.simutrans.com/index.php/board,112.0.html)
+- **一般的なヘルプ**: [Help Center](https://forum.simutrans.com/index.php/board,7.0.html)
+- **バグ報告**: [Bug Reports](https://forum.simutrans.com/index.php/board,8.0.html)
+
+---
+
+## 📝 ライセンス
+
+Simutransは **Artistic License 1.0** の下で配布されています。
+
+- ライセンス全文: [../LICENSE.txt](../LICENSE.txt)
+- OSI承認ライセンス
+- 使用、配布、修正、修正版の配布が可能
+
+**注意**: Pakset（ゲームデータ）は別ライセンスです。
+
+---
+
+## 🔄 ドキュメントの更新
+
+このドキュメントは2026年1月時点の情報に基づいています。
+
+### 更新履歴
+- 2026-01-12: 初版作成
+
+### 貢献
+
+ドキュメントの改善提案は[フォーラム](https://forum.simutrans.com/)で歓迎します！
+
+---
+
+## 🚀 次のステップ
+
+1. ✅ この README.md を読む
+2. 📖 [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) でプロジェクトを理解
+3. 🛠️ [DEVELOPMENT_SETUP.md](DEVELOPMENT_SETUP.md) で環境を構築
+4. 🏗️ [TECHNICAL_ARCHITECTURE.md](TECHNICAL_ARCHITECTURE.md) でアーキテクチャを学習
+5. 💻 コードを読み始める！
+
+Happy Coding! 🚂
