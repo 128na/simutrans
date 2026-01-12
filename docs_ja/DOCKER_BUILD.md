@@ -137,14 +137,39 @@ ls -lh sim.exe
 
 #### MinGW クロスコンパイルの利点
 
-✅ **クロスプラットフォーム**: Linux や macOS から Windows バイナリをビルド可能  
-✅ **環境の一貫性**: Docker コンテナで依存関係が完全に管理される  
-✅ **CI/CD 対応**: GitHub Actions などで自動ビルド可能  
+✅ **クロスプラットフォーム**: Linux や macOS から Windows バイナリをビルド可能
+✅ **環境の一貫性**: Docker コンテナで依存関係が完全に管理される
+✅ **CI/CD 対応**: GitHub Actions などで自動ビルド可能
 ✅ **Windows 不要**: Windows マシンが不要でビルド可能
 
 #### 注意事項
 
 ⚠️ MinGW でビルドされたバイナリは、Windows 用の依存 DLL が必要な場合があります。配布時は依存関係を確認してください。
+
+#### DLL のステージング（配布/実行準備）
+
+ビルド済みの `sim.exe` と必要な DLL をまとめて `dist/win64/` にコピーします。
+
+```bash
+# 必要なDLLを収集してステージング
+docker-compose run --rm simutrans-mingw ./docker-build-mingw.sh stage
+
+# Windows側での起動例（PowerShell）
+.\u005cdist\win64\sim.exe
+```
+
+`dist/win64/` に含まれる主なファイル:
+
+- sim.exe
+- SDL2.dll
+- libfreetype-6.dll
+- libpng16-16.dll
+- zlib1.dll
+- libstdc++-6.dll
+- libgcc_s_seh-1.dll
+- libwinpthread-1.dll
+
+（Windows 標準の DLL はコピーされません。上記を同梱すれば DLL 不足エラーが解消されます。）
 
 ### 方法 B: Windows ネイティブビルド
 

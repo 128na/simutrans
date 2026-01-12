@@ -70,6 +70,49 @@ case "$BUILD_TYPE" in
         fi
         ;;
 
+        stage)
+                echo "Staging Windows runtime DLLs..."
+                set -e
+                OUTDIR=dist/win64
+                mkdir -p "$OUTDIR"
+
+                # Prefer top-level sim.exe
+                if [ -f ./sim.exe ]; then
+                        cp -f ./sim.exe "$OUTDIR/"
+                        EXE=./sim.exe
+                elif [ -f ./build/default/sim.exe ]; then
+                        cp -f ./build/default/sim.exe "$OUTDIR/"
+                        EXE=./build/default/sim.exe
+                else
+                        echo "sim.exe not found. Run '$0 make' first." >&2
+                        exit 1
+                fi
+
+                echo "Analyzing DLL imports from $EXE ..."
+                DLLS=$(x86_64-w64-mingw32-objdump -p "$EXE" | awk '/DLL Name:/ {print $3}' | tr -d '\r')
+                echo "$DLLS" | sed 's/^/  - /'
+
+                echo "Copying non-system DLLs..."
+                for d in $DLLS; do
+                    case "$(echo "$d" | tr 'A-Z' 'a-z')" in
+                        advapi32.dll|kernel32.dll|shell32.dll|user32.dll|winmm.dll|ws2_32.dll|msvcrt.dll)
+                            continue ;;
+                    esac
+                    SRC="/usr/x86_64-w64-mingw32/bin/$d"
+                    if [ ! -f "$SRC" ]; then
+                        SRC=$(find /usr/x86_64-w64-mingw32/bin /usr/x86_64-w64-mingw32/lib /usr/lib/gcc/x86_64-w64-mingw32 -maxdepth 3 -type f -name "$d" 2>/dev/null | head -n1 || true)
+                    fi
+                    if [ -n "$SRC" ] && [ -f "$SRC" ]; then
+                        cp -f "$SRC" "$OUTDIR/"
+                    else
+                        echo "Warning: $d not found in common MinGW paths" >&2
+                    fi
+                done
+
+                echo "Staged files:"
+                ls -lh "$OUTDIR"
+                ;;
+
     cmake)
         echo "Building with CMake (MinGW cross-compile)..."
 
@@ -111,9 +154,10 @@ case "$BUILD_TYPE" in
         ;;
 
     *)
-        echo "Usage: $0 {make|cmake|clean}"
+        echo "Usage: $0 {make|stage|cmake|clean}"
         echo ""
         echo "  make   - Build with Make (default)"
+        echo "  stage  - Collect required DLLs into dist/win64"
         echo "  cmake  - Build with CMake"
         echo "  clean  - Clean build artifacts"
         exit 1
