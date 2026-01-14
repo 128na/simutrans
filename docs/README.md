@@ -1,7 +1,7 @@
 # Simutrans 開発者向けドキュメント（非公式だよ ☆）
 
-このページは https://github.com/aburch/simutrans の内容を日本語でいい感じに訳してもらったドキュメントです。
-内容が不正確・古い場合が多分にあるためご注意ください。
+このページは https://github.com/aburch/simutrans の内容を Copilot 大先生に日本語でいい感じに訳してもらったドキュメントです。
+継続的にメンテナンスするかは未定です。内容が不正確・古い場合が多分にあるためご注意ください。
 
 ドキュメントの元データはこちら https://github.com/128na/simutrans/tree/misc/docs
 
