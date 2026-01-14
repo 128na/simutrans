@@ -8,6 +8,13 @@
 - **[architecture/](architecture/)** - アーキテクチャ・設計思想
 - **[systems/](systems/)** - 個別システムの詳細解説
 
+## 🌐 公開について
+
+このページは https://github.com/aburch/simutrans の内容を日本語でいい感じに訳してもらったドキュメントです。
+内容が不正確・古い場合が多分にあるためご注意ください。
+
+ドキュメントの元データはこちら https://github.com/128na/simutrans/tree/misc/docs
+
 ---
 
 ## 📚 ドキュメント一覧
