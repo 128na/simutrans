@@ -4,6 +4,21 @@
 
 このドキュメントでは、Simutrans のすべての依存ライブラリとその詳細を説明します。
 
+## 目的
+
+このドキュメントは以下の目的で作成されています：
+
+- **完全なリファレンス**: すべての必須およびオプショナルな依存ライブラリの情報
+- **インストール手順**: プラットフォーム別の詳細なインストール方法
+- **トラブルシューティング**: 依存関係の問題解決手順
+- **ライセンス情報**: 各ライブラリのライセンスと互換性
+
+**対象読者:**
+
+- ビルド環境を整備する開発者
+- 依存関係の問題を解決したい方
+- ライブラリの詳細を理解したい方
+
 ## 必須依存関係
 
 ### zlib
@@ -721,6 +736,40 @@ cmake --build .
 - [SDL2 Wiki](https://wiki.libsdl.org/)
 - [FreeType Documentation](https://www.freetype.org/freetype2/docs/documentation.html)
 - [FluidSynth Documentation](https://www.fluidsynth.org/api/)
+
+---
+
+## 関連ファイル
+
+### 依存関係管理
+
+- **vcpkg マニフェスト**: `vcpkg.json`
+- **CMake 設定**: `cmake/SimutransFindDependencies.cmake`
+- **Make 設定**: `config.default`, `config.template`
+
+### インストールスクリプト
+
+- **Windows**: `tools/install-building-libs-*.bat`
+- **Debian/Ubuntu**: `tools/setup-debian.sh`
+- **macOS**: `setup-development.sh`
+
+---
+
+## まとめ
+
+Simutrans の依存関係は、安定性と互換性を優先して設計されています：
+
+**主な特徴**:
+
+- **ミニマルな必須依存**: 基本的なライブラリのみを必須化
+- **プラットフォーム対応**: Windows、Linux、macOS、Android で共通
+- **柔軟な選択肖**: 圧縮ライブラリや音声ライブラリは選択可能
+- **vcpkg 統合**: Windows での依存関係管理を自動化
+- **OSS フレンドリー**: すべてのライブラリが OSI 承認ライセンス
+
+依存関係を準備したら、次は [DEVELOPMENT_SETUP.md](DEVELOPMENT_SETUP.md) で開発環境を構築しましょう。
+
+---
 
 ## 更新履歴
 

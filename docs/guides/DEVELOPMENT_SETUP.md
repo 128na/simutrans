@@ -4,6 +4,21 @@
 
 このガイドでは、Simutrans の開発環境をセットアップする手順を説明します。
 
+## 目的
+
+このドキュメントは以下の目的で作成されています：
+
+- **プラットフォーム別ガイド**: Windows、Linux、macOS での環境構築手順
+- **ビルドシステム選択**: Make、CMake、Visual Studio の使い分け
+- **IDE 設定**: VS Code、Visual Studio、CLion の設定方法
+- **トラブルシューティング**: よくある問題と解決方法
+
+**対象読者:**
+
+- 開発環境を構築したい開発者
+- 初めて Simutrans のビルドに挑戦する方
+- ビルドエラーを解決したい方
+
 ## 前提条件
 
 ### 共通要件
@@ -509,6 +524,45 @@ make FLAGS="-O3 -march=native"
 cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build .
 ```
+
+---
+
+## 関連ファイル
+
+### ビルド設定
+
+- **CMake**: `CMakeLists.txt`, `cmake/SimutransCompileOptions.cmake`
+- **Make**: `Makefile`, `common.mk`
+- **Visual Studio**: `Simutrans.sln`, `*.vcxproj`
+
+### 依存関係
+
+- **vcpkg**: `vcpkg.json`
+- **設定ファイル**: `config.default`, `config.template`
+
+### セットアップスクリプト
+
+- **Debian/Ubuntu**: `tools/setup-debian.sh`
+- **macOS**: `setup-development.sh`
+- **Windows**: `tools/install-building-libs-*.bat`
+
+---
+
+## まとめ
+
+Simutrans の開発環境セットアップは、プラットフォームごとに最適化されています：
+
+**主な特徴**:
+
+- **柔軟なビルドシステム**: Make、CMake、Visual Studio から選択
+- **IDE 統合**: VS Code、Visual Studio、CLion での開発をサポート
+- **vcpkg 統合**: Windows での依存関係管理が簡単
+- **クロスプラットフォーム**: 一つのコードベースで全プラットフォームに対応
+- **デバッグサポート**: 各 IDE で充実したデバッグ機能
+
+環境を構築したら、次は [TECHNICAL_ARCHITECTURE.md](../architecture/TECHNICAL_ARCHITECTURE.md) でコードベースを理解しましょう。
+
+---
 
 ## 次のステップ
 

@@ -4,6 +4,21 @@
 
 Docker を使用することで、ホスト環境を汚さずに一貫したビルド環境を構築できます。すべての依存関係が Docker イメージ内に含まれるため、セットアップが簡単です。
 
+## 目的
+
+このドキュメントは以下の目的で作成されています：
+
+- **簡単セットアップ**: ホスト環境を汚さずにビルド環境を構築
+- **再現性**: どのマシンでも同じ環境でビルド
+- **CI/CD 統合**: 自動化ビルドパイプラインでの利用
+- **クロスコンパイル**: MinGW を使用した Windows バイナリのビルド
+
+**対象読者:**
+
+- ホスト環境を汚さずにビルドしたい開発者
+- CI/CD 環境を構築したい方
+- 複数のプラットフォーム向けにビルドしたい方
+
 ## 必要なもの
 
 - **Docker Desktop** (Windows/Mac) または **Docker Engine** (Linux)
@@ -615,6 +630,44 @@ USER simutrans
 # ベースイメージを定期的に更新
 docker-compose build --pull
 ```
+
+---
+
+## 関連ファイル
+
+### Docker 設定
+
+- **Dockerfile**: `Dockerfile` (Linux/GCC 用)
+- **MinGW Dockerfile**: `Dockerfile.mingw` (Windows クロスコンパイル用)
+- **Docker Compose**: `docker-compose.yml`
+
+### ビルドスクリプト
+
+- **Linux ビルド**: `docker-build.sh`
+- **MinGW ビルド**: `docker-build-mingw.sh`
+
+### CMake 設定
+
+- **メイン**: `CMakeLists.txt`
+- **バックエンド設定**: `cmake/SimutransBackend.cmake`
+
+---
+
+## まとめ
+
+Docker を使用した Simutrans のビルドは、再現性と便利さを提供します：
+
+**主な特徴**:
+
+- **クリーンな環境**: ホストシステムを汚さずにビルド
+- **再現性**: どのマシンでも同じ結果
+- **簡単セットアップ**: `docker-compose up` だけでビルド環境が完成
+- **クロスコンパイル**: MinGW で Windows バイナリを Linux からビルド
+- **CI/CD 対応**: GitHub Actions や GitLab CI で簡単に統合
+
+Docker 環境でのビルドに慣れたら、[DEVELOPMENT_SETUP.md](DEVELOPMENT_SETUP.md) でネイティブ環境も試してみましょう。
+
+---
 
 ## 他のドキュメント
 
