@@ -186,6 +186,29 @@ Simutrans の Pakset（グラフィックス定義ファイル）を作成する
 
 ---
 
+#### [IMAGE_CONVERSION.md](systems/IMAGE_CONVERSION.md) 🎨
+
+**画像変換システム（PNG ⇔ Binary）**
+
+Simutrans の PNG 画像とバイナリスプライト形式の間での変換メカニズムの詳細解説です。
+
+**内容:**
+
+- PNG 読み込みと raw_image_t クラス
+- RGB → PIXVAL 色変換（特殊色、プレイヤーカラー）
+- Run-Length Encoding（RLE）圧縮アルゴリズム
+- PAK ファイルのバイナリ構造
+- 透明度処理とアルファブレンディング
+- パフォーマンス最適化とデバッグ
+
+**対象読者:**
+
+- Pakset 制作の内部動作を理解したい方
+- 画像圧縮アルゴリズムに興味がある開発者
+- グラフィックスシステムを改善したい方
+
+---
+
 #### [NETTOOL.md](systems/NETTOOL.md) 🛠️
 
 **Simutrans ネットワークツール**

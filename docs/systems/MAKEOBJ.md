@@ -530,6 +530,7 @@ my-pakset/
 
 - **ソースコード**: `src/makeobj/`
 - **ビルド設定**: `src/makeobj/CMakeLists.txt`, `src/makeobj/Makefile`
+- **画像変換システム**: [IMAGE_CONVERSION.md](IMAGE_CONVERSION.md) - PNG ⇔ Binary 変換の詳細
 - **Dat ファイルサンプル**: 各 Pakset のソースリポジトリ
 - **公式 Pakset**:
   - pak64: https://github.com/simutrans/simutrans/tree/master/paksets

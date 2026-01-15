@@ -18,5 +18,6 @@
 
 ### 詳細な仕様
 
+- [IMAGE_CONVERSION.md](IMAGE_CONVERSION.md) - 画像変換システム（PNG ⇔ Binary）
 - [VEHICLE_ROUTE_SEARCH.md](VEHICLE_ROUTE_SEARCH.md) - 経路検索アルゴリズム
 - [VEHICLE_TERMINAL_SPEED.md](VEHICLE_TERMINAL_SPEED.md) - ターミナル速度の計算
