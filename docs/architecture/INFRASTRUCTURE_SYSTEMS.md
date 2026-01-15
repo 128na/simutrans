@@ -229,20 +229,16 @@ uint32 total_time;    // 総経過時間（ミリ秒）
 ### 月次イベント処理
 
 ```mermaid
-sequenceDiagram
-    participant Loop
-    participant World
-    participant Player
-    participant Convoy
-    participant Stadt
-
-    Loop->>World: is_new_month?
-    World->>Player: new_month
-    World->>Convoy: new_month
-    World->>Stadt: new_month
-    Player->>Player: Monthly settle
-    Convoy->>Convoy: Update stats
-    Stadt->>Stadt: Growth check
+flowchart TD
+    A[Month Check] --> B{New Month?}
+    B -->|Yes| C[World: new_month]
+    B -->|No| E[Continue]
+    C --> D1[Player: settle accounts]
+    C --> D2[Convoy: update stats]
+    C --> D3[Stadt: growth check]
+    D1 --> E
+    D2 --> E
+    D3 --> E
 ```
 
 ### 時間比率
