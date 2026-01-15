@@ -31,12 +31,23 @@
         securityLevel: 'loose'
       };
       mermaid.initialize(config);
-      
+
+      // language-mermaid クラスを mermaid クラスに変換
+      function convertMermaidClasses() {
+        document.querySelectorAll('pre > code.language-mermaid').forEach(function(el) {
+          el.classList.remove('language-mermaid');
+          el.classList.add('mermaid');
+          el.parentElement.classList.add('mermaid');
+        });
+      }
+
       // DOMContentLoaded後に実行
       if (document.readyState !== 'loading') {
+        convertMermaidClasses();
         mermaid.run();
       } else {
         document.addEventListener('DOMContentLoaded', function() {
+          convertMermaidClasses();
           mermaid.run();
         });
       }
