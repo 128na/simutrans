@@ -41,20 +41,17 @@ setx VCPKG_ROOT "%CD%"
 
 ##### 3. 依存ライブラリのインストール
 
-```powershell
-# Simutransのリポジトリに移動
-cd c:\dev\simutrans
+**オプション A: vcpkg.json を使用（推奨）**
 
-# アーキテクチャに応じたスクリプトをvcpkgフォルダにコピーして実行
-# x64の場合:
-copy tools\install-building-libs-x64.bat [vcpkg-root]\
+Simutrans のプロジェクトルートには `vcpkg.json` が含まれており、Visual Studio が自動的に依存関係をインストールします。
+
+**オプション B: 手動でインストール**
+
+```powershell
+# vcpkgディレクトリに移動
 cd [vcpkg-root]
-.\install-building-libs-x64.bat
-```
 
-または手動でインストール：
-
-```powershell
+# 必要なライブラリをインストール（vcpkg.jsonと同じ内容）
 .\vcpkg install freetype:x64-windows-static
 .\vcpkg install miniupnpc:x64-windows-static
 .\vcpkg install pthread:x64-windows-static
@@ -62,6 +59,8 @@ cd [vcpkg-root]
 .\vcpkg install sdl2:x64-windows-static
 .\vcpkg install zlib:x64-windows-static
 ```
+
+**注意**: `tools/install-building-libs-x64.bat` スクリプトは古くなっている可能性があります。上記の手動インストールコマンドまたは vcpkg.json の使用を推奨します。
 
 ##### 4. プロジェクトを開く
 

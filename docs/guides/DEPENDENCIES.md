@@ -135,7 +135,9 @@ vcpkg install freetype:x64-windows-static
 - セーブファイルの圧縮（zstd より高圧縮率）
 - ネットワークデータ
 
-**注意**: bzip2 と zstd のどちらか一方が必要
+**注意**: bzip2 と zstd のどちらか一方が必要です。
+
+**vcpkg を使用する場合**: vcpkg.json では zstd が指定されているため、Windows で vcpkg を使用する場合は zstd が自動的にインストールされます。
 
 #### インストール
 
