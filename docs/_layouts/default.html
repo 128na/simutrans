@@ -23,39 +23,48 @@
         </div>
       {% endif %}
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <script>
-      let config = {
+      mermaid.initialize({ 
         startOnLoad: false,
-        theme: 'default',
-        securityLevel: 'loose'
-      };
-      mermaid.initialize(config);
+        theme: 'default'
+      });
 
-      // language-mermaid クラスを mermaid クラスに変換し、HTMLエンティティをデコード
-      function convertMermaidClasses() {
-        document.querySelectorAll('pre > code.language-mermaid').forEach(function(el) {
+      function processMermaid() {
+        // language-mermaid コードブロックをすべて取得
+        const blocks = document.querySelectorAll('pre code.language-mermaid');
+        console.log('Found ' + blocks.length + ' mermaid blocks');
+        
+        blocks.forEach(function(block) {
+          // 親の pre タグを取得
+          const pre = block.parentElement;
+          
           // HTMLエンティティをデコード
-          const textarea = document.createElement('textarea');
-          textarea.innerHTML = el.textContent;
-          el.textContent = textarea.value;
-
-          el.classList.remove('language-mermaid');
-          el.classList.add('mermaid');
-          el.parentElement.classList.add('mermaid');
+          const decoded = block.innerHTML
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&');
+          
+          // 新しい div を作成
+          const div = document.createElement('div');
+          div.className = 'mermaid';
+          div.textContent = decoded;
+          
+          // 置き換え
+          pre.parentNode.replaceChild(div, pre);
         });
-      }
-
-      // DOMContentLoaded後に実行
-      if (document.readyState !== 'loading') {
-        convertMermaidClasses();
+        
+        // Mermaid をレンダリング
         mermaid.run();
-      } else {
-        document.addEventListener('DOMContentLoaded', function() {
-          convertMermaidClasses();
-          mermaid.run();
-        });
       }
+
+      // ページ読み込み後に実行
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', processMermaid);
+      } else {
+        processMermaid();
+      }
+    </script>
     </script>
   </body>
 </html>
