@@ -7,6 +7,7 @@ on: [push]
 
 jobs:
   winSDL2-64:
+   if: github.ref != 'refs/heads/misc'
    runs-on: windows-latest
    steps:
     - name: Setup MSBuild and add to PATH

@@ -4,6 +4,7 @@ on: [push]
 
 jobs:
   makeobj_windows-nightly:
+    if: github.ref != 'refs/heads/misc'
     name: makeobj Windows
     runs-on: windows-latest
 

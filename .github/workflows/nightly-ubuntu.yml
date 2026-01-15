@@ -4,6 +4,7 @@ on: [push]
 
 jobs:
   build:
+    if: github.ref != 'refs/heads/misc'
 
     runs-on: ubuntu-latest
 
