@@ -239,13 +239,11 @@ sequenceDiagram
     Loop->>World: is_new_month()?
     alt 月が変わった
         World->>Player: new_month()
-        Player->>Player: 月次決算<br/>倒産チェック
-
+        Player->>Player: 月次決算 (倒産チェック)
         World->>Convoy: new_month()
-        Convoy->>Convoy: 統計集計<br/>路線更新
-
+        Convoy->>Convoy: 統計集計 (路線更新)
         World->>Stadt: new_month()
-        Stadt->>Stadt: 成長判定<br/>建物配置
+        Stadt->>Stadt: 成長判定 (建物配置)
     else 月内
         Loop->>Loop: 続行
     end
