@@ -230,19 +230,18 @@ uint32 total_time;    // 総経過時間（ミリ秒）
 
 ```mermaid
 sequenceDiagram
-    participant Loop as Loop
-    participant World as World
-    participant Player as Player
-    participant Convoy as Convoy
-    participant Stadt as Stadt
+    participant Loop
+    participant World
+    participant Player
+    participant Convoy
+    participant Stadt
 
-    Loop->>World: is_new_month()?
-    Note over World: Month changed
-    World->>Player: new_month()
-    Player->>Player: Monthly report
-    World->>Convoy: new_month()
-    Convoy->>Convoy: Statistics update
-    World->>Stadt: new_month()
+    Loop->>World: is_new_month?
+    World->>Player: new_month
+    World->>Convoy: new_month
+    World->>Stadt: new_month
+    Player->>Player: Monthly settle
+    Convoy->>Convoy: Update stats
     Stadt->>Stadt: Growth check
 ```
 
