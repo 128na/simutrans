@@ -230,23 +230,20 @@ uint32 total_time;    // 総経過時間（ミリ秒）
 
 ```mermaid
 sequenceDiagram
-    participant Loop as シミュレーション
-    participant World as ワールド
-    participant Player as プレイヤー
-    participant Convoy as 編成
-    participant Stadt as 都市
+    participant Loop as Loop
+    participant World as World
+    participant Player as Player
+    participant Convoy as Convoy
+    participant Stadt as Stadt
 
     Loop->>World: is_new_month()?
-    alt 月が変わった
+    Note over World: Month changed
     World->>Player: new_month()
-    Player->>Player: 月次決算
+    Player->>Player: Monthly report
     World->>Convoy: new_month()
-    Convoy->>Convoy: 統計集計
+    Convoy->>Convoy: Statistics update
     World->>Stadt: new_month()
-    Stadt->>Stadt: 成長判定
-    else 月内
-    Loop->>Loop: 続行
-    end
+    Stadt->>Stadt: Growth check
 ```
 
 ### 時間比率
