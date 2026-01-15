@@ -1,0 +1,44 @@
+name: Mermaid Lint Check
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - '.github/workflows/check-mermaid.yml'
+  pull_request:
+    branches: [ main, master, develop ]
+    paths:
+      - '**.md'
+      - 'docs/**'
+
+jobs:
+  mermaid-lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'docs/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ./docs
+        run: npm ci
+
+      - name: Check Mermaid syntax
+        working-directory: ./docs
+        run: npm run lint
+
+      - name: Report results
+        if: failure()
+        run: |
+          echo "❌ Mermaid syntax check failed"
+          echo "Please run 'npm run lint' in docs/ directory to see detailed errors"
+          exit 1

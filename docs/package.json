@@ -1,0 +1,14 @@
+{
+	"name": "docs",
+	"version": "1.0.0",
+	"description": "このページは [github.com/aburch/simutrans](https://github.com/aburch/simutrans) の内容を Copilot 大先生に日本語でいい感じに訳してもらったドキュメントです。 継続的にメンテナンスするかは未定です。内容が不正確・古い場合が多分にあるためご注意ください。",
+	"main": "index.js",
+	"scripts": {
+		"lint": "node scripts/check-mermaid.js"
+	},
+	"devDependencies": {
+		"mermaid": "^10.6.1"
+	},
+	"author": "",
+	"license": "ISC"
+}
