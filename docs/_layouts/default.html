@@ -26,15 +26,20 @@
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script>
       let config = {
-        startOnLoad: true,
+        startOnLoad: false,
         theme: 'default',
         securityLevel: 'loose'
       };
       mermaid.initialize(config);
 
-      // language-mermaid クラスを mermaid クラスに変換
+      // language-mermaid クラスを mermaid クラスに変換し、HTMLエンティティをデコード
       function convertMermaidClasses() {
         document.querySelectorAll('pre > code.language-mermaid').forEach(function(el) {
+          // HTMLエンティティをデコード
+          const textarea = document.createElement('textarea');
+          textarea.innerHTML = el.textContent;
+          el.textContent = textarea.value;
+
           el.classList.remove('language-mermaid');
           el.classList.add('mermaid');
           el.parentElement.classList.add('mermaid');
