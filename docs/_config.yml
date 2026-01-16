@@ -1,0 +1,5 @@
+markdown: GFM
+theme: jekyll-theme-primer
+plugins:
+  - jekyll-github-metadata
+

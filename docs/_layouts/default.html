@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang | default: page.lang | default: 'en' }}">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    {% seo %}
+    <link rel="stylesheet" href="{{ '/assets/css/style.css?v=' | append: site.github.build_revision | relative_url }}">
+    {% include head-custom.html %}
+  </head>
+  <body>
+    <div class="container-lg px-3 my-5 markdown-body">
+      {% if site.title and site.title != page.title %}
+        <h1><a href="{{ '/' | relative_url }}">{{ site.title }}</a></h1>
+      {% endif %}
+
+      {{ content }}
+
+      {% if site.github.private != true and site.github.license %}
+        <div class="footer border-top border-gray-light mt-5 pt-3 text-right text-gray">
+          This site is open source. {% github_edit_link "Improve this page" %}.
+        </div>
+      {% endif %}
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+      mermaid.initialize({ 
+        startOnLoad: false,
+        theme: 'default'
+      });
+
+      function processMermaid() {
+        // language-mermaid コードブロックをすべて取得
+        const blocks = document.querySelectorAll('pre code.language-mermaid');
+        console.log('Found ' + blocks.length + ' mermaid blocks');
+        
+        blocks.forEach(function(block) {
+          // 親の pre タグを取得
+          const pre = block.parentElement;
+          
+          // HTMLエンティティをデコード
+          const decoded = block.innerHTML
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&');
+          
+          // 新しい div を作成
+          const div = document.createElement('div');
+          div.className = 'mermaid';
+          div.textContent = decoded;
+          
+          // 置き換え
+          pre.parentNode.replaceChild(div, pre);
+        });
+        
+        // Mermaid をレンダリング
+        mermaid.run();
+      }
+
+      // ページ読み込み後に実行
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', processMermaid);
+      } else {
+        processMermaid();
+      }
+    </script>
+    </script>
+  </body>
+</html>

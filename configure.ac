@@ -66,7 +66,7 @@ else
 	AC_SEARCH_LIBS(FcInitLoadConfigAndFonts, fontconfig,
 		[AC_SUBST(fontconfig, 1)],
 		[AC_SUBST(fontconfig, 0)],
-		-lfontconfig )
+		[-lfontconfig -lexpat] )
 	# optional fluidsynth
 	AC_SEARCH_LIBS(new_fluid_settings, fluidsynth,
 		[AC_SUBST(fluidsynth, 1)],
@@ -74,7 +74,8 @@ else
 	# optional fluidsynth
 	AC_SEARCH_LIBS(FcInit, fontconfig,
 		[AC_SUBST(fontconfig, 1)],
-		[AC_SUBST(fontconfig, 0)] )
+		[AC_SUBST(fontconfig, 0)],
+		[-lexpat] )
 	if uname | grep "Darwin"
 	then
 		AC_LANG_PUSH(Objective C++)

@@ -107,8 +107,8 @@ else ifeq ($(OSTYPE),mingw)
 else ifeq ($(OSTYPE),linux)
   ifeq ($(shell expr $(STATIC) \>= 1), 1)
     LDFLAGS +=  -Wl,-Bstatic -lm
-    DYNAMICSTART = -Wl,-Bdynamic 
-    DYNAMICEND = -Wl,-Bstatic 
+    DYNAMICSTART = -Wl,-Bdynamic
+    DYNAMICEND = -Wl,-Bstatic
   endif
 else ifeq ($(OSTYPE),mac)
   LDFLAGS += -framework Cocoa
@@ -189,7 +189,7 @@ ifneq ($(BACKEND),posix)
       LDFLAGS += -lpng -lharfbuzz
     endif
   endif
-  
+
   ifeq ($(OSTYPE),mingw)
     LDFLAGS += -lfreetype
   endif
@@ -199,7 +199,11 @@ ifneq ($(BACKEND),posix)
       sdfsfsd := $(shell echo error)
       CFLAGS  += -DUSE_FONTCONFIG
       CFLAGS  += $(shell $(FONTCONFIG_CONFIG) --cflags)
-      LDFLAGS += $(shell $(FONTCONFIG_CONFIG) --libs)
+      ifeq ($(shell expr $(STATIC) \>= 1), 1)
+        LDFLAGS += $(shell $(FONTCONFIG_CONFIG) --libs --static)
+      else
+        LDFLAGS += $(shell $(FONTCONFIG_CONFIG) --libs)
+      endif
     endif
   endif
 endif
