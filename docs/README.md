@@ -2,7 +2,7 @@
 
 ## 概要
 
-このディレクトリは、Simutrans プロジェクトの技術ドキュメント（日本語）をまとめたトップページです。詳細な一覧は新設した索引ページに集約しました。カテゴリ別の入口のみを簡潔に掲載します。
+このディレクトリは、Simutrans プロジェクトの技術ドキュメント（日本語）をまとめたトップページです。詳細な一覧は全ページ索引に集約しました。カテゴリ別の入口のみを簡潔に掲載します。
 
 **対象読者:**
 
@@ -25,7 +25,7 @@
 
 ## クイックリンク
 
-- 📚 全ページ索引: [INDEX.md](INDEX.md)
+- 📚 全ページ索引: [ALL_PAGES.md](ALL_PAGES.md)
 - 🚀 入門・セットアップ: [guides/](guides/)
 - 🏗️ アーキテクチャ: [architecture/](architecture/)
 - 🎮 個別システム: [systems/](systems/)
@@ -34,14 +34,14 @@
 
 ## 関連ファイル
 
-- 索引ページ: `docs/INDEX.md`
+- 索引ページ: `docs/ALL_PAGES.md`
 - ガイド: `docs/guides/README.md`
 - アーキテクチャ: `docs/architecture/README.md`
 - システム: `docs/systems/README.md`
 
 ## まとめ
 
-README はカテゴリの入口のみを提供し、詳細は [INDEX.md](INDEX.md) に集約しました。新しいドキュメントを追加した際は、カテゴリ側 README と索引の両方にリンクを追加してください。
+README はカテゴリの入口のみを提供し、詳細は [ALL_PAGES.md](ALL_PAGES.md) に集約しました。新しいドキュメントを追加した際は、カテゴリ側 README と索引の両方にリンクを追加してください。
 
 ### 目的別ガイド
 
