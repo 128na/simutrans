@@ -10,10 +10,10 @@ jobs:
    runs-on: windows-latest
    steps:
     - name: Setup MSBuild and add to PATH
-      uses: microsoft/setup-msbuild@v2
+      uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2.0.0
 
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       id: checkout_code
 
     - name: Make NSIS
@@ -38,7 +38,7 @@ jobs:
         dir
 
     - name: Update binaries of Nightly Release
-      uses: svenstaro/upload-release-action@v2
+      uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # v2
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         file: ./simuwin64-SDL2-nightly.zip

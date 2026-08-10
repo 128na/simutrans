@@ -9,14 +9,14 @@ jobs:
 
     steps:
       - name: Setup Mingw
-        uses: msys2/setup-msys2@v2
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
         with:
           msystem: MINGW32
           update: false
           install: base-devel mingw-w64-i686-toolchain mingw-w64-i686-gcc mingw-w64-i686-libpng
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: build
         shell: msys2 {0}
@@ -33,7 +33,7 @@ jobs:
         run: Compress-Archive build\default\makeobj\makeobj.exe build\default\makeobj\makeobj-windows-nightly.zip
 
       - name: Update binaries of Nightly Release
-        uses: svenstaro/upload-release-action@v2
+        uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: build\default\makeobj\makeobj-windows-nightly.zip
@@ -47,7 +47,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: install_dependencies
         run: |
@@ -74,7 +74,7 @@ jobs:
           zip -r -9 makeobj_linux-x64-nightly.zip makeobj
 
       - name: Update binaries of Nightly Release
-        uses: svenstaro/upload-release-action@v2
+        uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: src/makeobj/makeobj_linux-x64-nightly.zip
@@ -87,7 +87,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
     - name: install_dependencies
       run: |
@@ -105,7 +105,7 @@ jobs:
         zip -r makeobj-arm-nightly.zip makeobj
 
     - name: Update binaries of Nightly Release
-      uses: svenstaro/upload-release-action@v2
+      uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # v2
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         file: build/src/makeobj/makeobj-arm-nightly.zip

@@ -9,7 +9,7 @@ jobs:
     permissions: write-all
     steps:
 
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       with:
         fetch-depth: 0
 
@@ -18,14 +18,14 @@ jobs:
         echo "revision=`tools/get_revision.sh`" >> $GITHUB_ENV
 
     - name: set current head to nightly
-      uses: richardsimko/update-tag@v1
+      uses: richardsimko/update-tag@aab2434e9a5040687874aa39d1c6377ec0cb0d94 # v1.1.6
       with:
           tag_name: Nightly
       env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: rename the release to include revision
-      uses: meeDamian/github-release@2.0
+      uses: meeDamian/github-release@7ae19492500104f636b3fee4d8103af0fed36c8e # 2.0
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         tag: Nightly

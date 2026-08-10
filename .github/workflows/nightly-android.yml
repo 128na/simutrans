@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       with:
         fetch-depth: 0
         path: 'gh-clone/simutrans'
@@ -117,7 +117,7 @@ jobs:
 
 
     - name: Update binaries of Nightly Release aab
-      uses: svenstaro/upload-release-action@v2
+      uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # v2
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         file: /android-sdl/simutrans-android-project/simutrans/build/outputs/bundle/release/simutrans-release.aab
@@ -126,7 +126,7 @@ jobs:
         overwrite: true
 
     - name: Update binaries of Nightly Release apk
-      uses: svenstaro/upload-release-action@v2
+      uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de # v2
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         file: /android-sdl/simutrans-android-project/simutrans/build/outputs/bundle/release/simutrans-nightly.apk
@@ -135,7 +135,7 @@ jobs:
         overwrite: true
 
     - name: Release Beta on Google Play Store
-      uses: r0adkll/upload-google-play@v1
+      uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
       if: github.repository == 'simutrans/simutrans'
       with:
         serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT_JSON }}
