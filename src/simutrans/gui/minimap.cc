@@ -29,6 +29,7 @@
 
 #include "../obj/way/schiene.h"
 #include "../obj/leitung2.h"
+#include "../obj/field.h"
 #include "../utils/cbuffer.h"
 #include "../display/scr_coord.h"
 #include "../display/simgraph.h"
@@ -710,35 +711,26 @@ PIXVAL minimap_t::calc_ground_color(const grund_t *gr)
 				color = COL_MONORAIL;
 				break;
 			case grund_t::fundament:
-				{
-					// object at zero is either factory or house (or attraction ... )
-					gebaeude_t *gb = gr->find<gebaeude_t>();
-					fabrik_t *fab = gb ? gb->get_fabrik() : NULL;
-					if(fab==NULL) {
-						color = gfx->palette_lookup(COL_GREY3);
-					}
-					else {
+				if (gebaeude_t* gb = gr->find<gebaeude_t>()) {
+					if (fabrik_t* fab = gb->get_fabrik()) {
 						color = fab->get_color();
+						break;
 					}
 				}
+				else if (field_t* field = gr->find<field_t>()) {
+					color = field->get_factory()->get_color();
+					break;
+				}
+				color = gfx->palette_lookup(COL_GREY3);
 				break;
 			case grund_t::wasser:
 				{
-					// object at zero is either factory or boat
-					gebaeude_t *gb = gr->find<gebaeude_t>();
-					fabrik_t *fab = gb ? gb->get_fabrik() : NULL;
-					if(fab==NULL) {
-						sint16 height = corner_sw(gr->get_grund_hang());
-						if( mode&MAP_HIDE_CONTOUR ) {
-							color = gfx->palette_lookup(map_type_color[1]); // second deep water color
-						}
-						else {
-							color = calc_height_color( world->lookup_hgt( gr->get_pos().get_2d() ) + height, world->get_water_hgt( gr->get_pos().get_2d() ) );
-						}
-						//color = gfx->palette_lookup(COL_BLUE); // water with boat?
+					sint16 height = corner_sw(gr->get_grund_hang());
+					if( mode&MAP_HIDE_CONTOUR ) {
+						color = gfx->palette_lookup(map_type_color[1]); // second deep water color
 					}
 					else {
-						color = fab->get_color();
+						color = calc_height_color( world->lookup_hgt( gr->get_pos().get_2d() ) + height, world->get_water_hgt( gr->get_pos().get_2d() ) );
 					}
 				}
 				break;
@@ -1165,12 +1157,6 @@ void minimap_t::set_display_mode(MAP_DISPLAY_MODE new_mode)
 }
 
 
-void minimap_t::new_month()
-{
-	needs_redraw = true;
-}
-
-
 void minimap_t::invalidate_map_lines_cache()
 {
 	last_schedule_counter = world->get_schedule_counter() - 1;
@@ -1308,13 +1294,13 @@ void minimap_t::draw(scr_coord pos)
 		return;
 	}
 
-	if(  mode & MAP_PAX_DEST  &&  selected_city!=NULL  ) {
-		const uint32 current_pax_destinations = selected_city->get_pax_destinations_new_change();
-		if(  pax_destinations_last_change > current_pax_destinations  ) {
-			// new month started.
+	if(  mode & MAP_PAX_DEST) {
+		if(  selected_city==NULL ||  pax_destinations_last_change > selected_city->get_pax_destinations_new_change()) {
+			// new month started or deselect.
 			calc_map();
+			pax_destinations_last_change = 0;
 		}
-		else if(  pax_destinations_last_change < current_pax_destinations  ) {
+		else if(  pax_destinations_last_change < selected_city->get_pax_destinations_new_change()) {
 			// new pax_dest in city.
 			const sparse_tpl<pax_dest_status_t> &pax_dests = selected_city->get_pax_destinations_new();
 			koord pos, min, max;
@@ -1327,16 +1313,20 @@ void minimap_t::draw(scr_coord pos)
 				max = koord(((pos.x+1)*world->get_size().x)/PAX_DESTINATIONS_SIZE,
 				            ((pos.y+1)*world->get_size().y)/PAX_DESTINATIONS_SIZE);
 				pos = min;
+				PIXVAL sc = gfx->palette_lookup(pax_dest_status_colors[dst_status]);
 				do {
 					do {
-						set_map_color(pos, pax_dest_status_colors[dst_status]);
+						set_map_color(pos, sc);
 						pos.y++;
 					} while(pos.y < max.y);
 					pos.x++;
+					pos.y = min.y;
 				} while (pos.x < max.x);
 			}
 		}
-		pax_destinations_last_change = selected_city->get_pax_destinations_new_change();
+		if (selected_city) {
+			pax_destinations_last_change = selected_city->get_pax_destinations_new_change();
+		}
 	}
 
 	if(  (uint16)cur_size.w > map_data->get_width()  ) {
@@ -1758,7 +1748,11 @@ void minimap_t::draw(scr_coord pos)
 			koord size = f->get_desc()->get_building()->get_size(f->get_rotate());
 			sint16 x_size = max( 5, size.x*zoom_in );
 			sint16 y_size = max( 5, size.y*zoom_in );
-			gfx->draw_rect_clipped( fab_pos.x-1, fab_pos.y-1, x_size+2, y_size+2, gfx->palette_lookup(COL_BLACK), false CLIP_NUM_DEFAULT);
+			sint16 border = max(1, (zoom_in*2)/3);
+			rgb888_t frgb = gfx->get_pixval_rgb(f->get_color());
+			// make a dark or bright border depending of the colors used
+			PIXVAL box_color = gfx->palette_lookup((frgb.r | frgb.b | frgb.g) > 128 ? COL_BLACK : COL_WHITE);
+			gfx->draw_rect_clipped( fab_pos.x-border, fab_pos.y-border, x_size+2*border, y_size+2*border, box_color, false CLIP_NUM_DEFAULT);
 			gfx->draw_rect_clipped( fab_pos.x, fab_pos.y, x_size, y_size, f->get_color(), false CLIP_NUM_DEFAULT);
 		}
 	}
@@ -1863,13 +1857,11 @@ void minimap_t::draw(scr_coord pos)
 }
 
 
-void minimap_t::set_selected_city( const stadt_t* _city )
+void minimap_t::set_selected_city(const stadt_t* _city)
 {
-	if(  selected_city != _city  ) {
+	if (selected_city != _city) {
 		selected_city = _city;
-		if(  _city  ) {
-			pax_destinations_last_change = _city->get_pax_destinations_new_change();
-		}
+		pax_destinations_last_change = 0;
 		calc_map();
 	}
 }

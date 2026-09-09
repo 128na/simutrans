@@ -129,7 +129,10 @@ struct simgraph_t
 	palette_index_t (*palette_indexof)(PIXVAL color);
 
 	/// Get 24bit RGB888 colour from an index of the old 8bit palette
-	rgb888_t (*get_color_rgb)(palette_index_t idx);
+	rgb888_t(*get_color_rgb)(palette_index_t idx);
+
+	/// Get 24bit RGB888 colour from a PIVAL
+	rgb888_t(*get_pixval_rgb)(PIXVAL c);
 
 	/// Environment colours from RGB888 to system format
 	void (*env_t_rgb_to_system_colors)();
@@ -254,6 +257,9 @@ struct simgraph_t
 	/// Same as @ref draw_rect, but clips to active clip rect.
 	void (*draw_rect_clipped)(scr_coord_val xp, scr_coord_val yp, scr_coord_val w, scr_coord_val h, PIXVAL color, bool dirty  CLIP_NUM_DEF);
 
+	///  banded rectangle with multicolors
+	void (*draw_rect_colors_clipped)(scr_coord_val xp, scr_coord_val yp, scr_coord_val w, scr_coord_val h, PIXVAL* color, scr_coord_val num_colors, bool horizontal, bool dirty  CLIP_NUM_DEF);
+
 	/// Draw rect with rounded corners.
 	void (*draw_rounded_rect_clipped)(scr_coord_val xp, scr_coord_val yp, scr_coord_val w, scr_coord_val h, PIXVAL color, bool dirty);
 
@@ -366,10 +372,10 @@ struct simgraph_t
 
 	void (*draw_signal_direction)(scr_coord_val x, scr_coord_val y, uint8 way_dir, uint8 sig_dir, PIXVAL col1, PIXVAL col1_dark, bool is_diagonal, uint8 slope);
 
-	/// Takes a screenshot of @p screen_area and saves the image as 'simscrXX.png' (with XX being a placeholder for two numeric characters).
-	/// @returns true on success
-	/// @note For simgraph0 this is a no-op (as there is no display)
-	bool (*take_screenshot)(const scr_rect &screen_area);
+	/// Takes a screenshot of @p screen_area and saves the image to @p filename
+	/// @returns true on success, false on failure
+	/// @note For simgraph0 this will always fail (as there is no display)
+	bool (*take_screenshot)(const scr_rect &screen_area, const char *filename);
 
 	//
 	// Clipping

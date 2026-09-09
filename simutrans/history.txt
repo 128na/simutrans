@@ -12,6 +12,20 @@
 	ADD: Including handling of wayobj (as with ways, define diagonal[close1] for close diagonal image)
 	FIX: (Nazalassa) only send chat when hitting RETURN
 	ADD: Filter halt list also for permissions and shared ownership
+	ADD: shared ownership can be indicated by either horizontal or vertical color bars
+	CHG: no_route color for passenger overlay now magenta
+	CHG: box around factoryies not either black or white depending on contrast and draw fields in factory color
+	FIX: fields were not show not removed from minimap
+	ADD: (victor_18993) power tab for electricity producers
+	CHG: TOOL_SHOW_UNDERGROUND new default parameter 'T' for toggling between modes, 'U' for full underground only to properly delect the underground modes
+	FIX: Only make owner pieces of a halt public and give an error message, if nothing was converted
+	ADD: (victor_18993) quicker iterating through freelists in sync_step
+	FIX: minimap destination overlay for cities was broken
+	CHG: (poppo) elevated ways also allowed on top of bridges
+	CHG: (victor_18993) Prevent too high buildings to appear under bridges and elevated ways
+	     + new building parameter in dat file "height_clearance" The allowed spacing to grounds above it
+		 (If not set recalculated from the images)
+	FIX: Crash when using makeobj 'merge' or 'extract' commands
 
 
 Release of 124.5 (r11993 on 31-May-2026):

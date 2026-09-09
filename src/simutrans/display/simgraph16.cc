@@ -31,13 +31,6 @@
 #include <cstring>
 
 
-#ifdef _MSC_VER
-#	include <io.h>
-#	define W_OK 2
-#else
-#	include <unistd.h>
-#endif
-
 #ifdef MULTI_THREAD
 #include "../utils/simthread.h"
 
@@ -495,6 +488,7 @@ static const rgb888_t special_pal[SPECIAL_COLOR_COUNT] =
 static PIXVAL          simgraph16_palette_lookup             (palette_index_t idx);
 static palette_index_t simgraph16_palette_indexof            (PIXVAL color);
 static rgb888_t        simgraph16_get_color_rgb              (palette_index_t idx);
+static rgb888_t        simgraph16_get_pixval_rgb             (PIXVAL c);
 static void            simgraph16_env_t_rgb_to_system_colors ();
 static void            simgraph16_set_player_color_scheme    (const int player, const uint8 col1, const uint8 col2);
 static void            simgraph16_set_light_color            (int color_idx, rgb888_t day_colour, rgb888_t night_colour);
@@ -537,6 +531,7 @@ static PIXVAL          simgraph16_blend_colors               (PIXVAL background,
 static void            simgraph16_tint_rect                  (scr_coord_val xp, scr_coord_val yp, scr_coord_val w, scr_coord_val h, PIXVAL colval, int opacity);
 static void            simgraph16_draw_rect                  (scr_coord_val xp, scr_coord_val yp, scr_coord_val w, scr_coord_val h, PIXVAL color, bool dirty);
 static void            simgraph16_draw_rect_clipped          (scr_coord_val xp, scr_coord_val yp, scr_coord_val w, scr_coord_val h, PIXVAL color, bool dirty  CLIP_NUM_DEF);
+static void            simgraph16_draw_rect_colors_clipped   (scr_coord_val xp, scr_coord_val yp, scr_coord_val w, scr_coord_val h, PIXVAL* color, scr_coord_val num_colors, bool horizontal, bool dirty  CLIP_NUM_DEF);
 static void            simgraph16_draw_rounded_rect_clipped  (scr_coord_val xp, scr_coord_val yp, scr_coord_val w, scr_coord_val h, PIXVAL color, bool dirty);
 static void            simgraph16_draw_vline_clipped         (scr_coord_val xp, scr_coord_val yp, scr_coord_val h, PIXVAL color, bool dirty  CLIP_NUM_DEF);
 static void            simgraph16_flush_framebuffer          ();
@@ -566,7 +561,7 @@ static void            simgraph16_draw_empty_circle          (scr_coord_val, scr
 static void            simgraph16_draw_filled_circle         (scr_coord_val, scr_coord_val, int, const PIXVAL);
 static void            simgraph16_draw_bezier                (scr_coord_val, scr_coord_val, scr_coord_val, scr_coord_val, scr_coord_val, scr_coord_val, scr_coord_val, scr_coord_val, const PIXVAL, scr_coord_val, scr_coord_val);
 static void            simgraph16_draw_right_triangle        (scr_coord_val, scr_coord_val, scr_coord_val, const PIXVAL, const bool);
-static bool            simgraph16_take_screenshot            (const scr_rect &);
+static bool            simgraph16_take_screenshot            (const scr_rect &, const char *);
 static void            simgraph16_draw_signal_direction      (scr_coord_val, scr_coord_val, uint8, uint8, PIXVAL, PIXVAL, bool, uint8);
 static void            simgraph16_set_clip_rect              (scr_coord_val, scr_coord_val, scr_coord_val, scr_coord_val  CLIP_NUM_DEF, bool fit);
 static clip_dimension  simgraph16_get_clip_rect              (CLIP_NUM_DEF_NOUSE0);
@@ -595,6 +590,7 @@ simgraph_t g_simgraph16 = {
 	/*.palette_lookup              =*/ simgraph16_palette_lookup,
 	/*.palette_indexof             =*/ simgraph16_palette_indexof,
 	/*.get_color_rgb               =*/ simgraph16_get_color_rgb,
+	/*.pixval_to_rgb               =*/ simgraph16_get_pixval_rgb,
 	/*.env_t_rgb_to_system_colors  =*/ simgraph16_env_t_rgb_to_system_colors,
 	/*.set_player_color_scheme     =*/ simgraph16_set_player_color_scheme,
 	/*.set_light_color             =*/ simgraph16_set_light_color,
@@ -638,6 +634,7 @@ simgraph_t g_simgraph16 = {
 	/*.tint_rect                   =*/ simgraph16_tint_rect,
 	/*.draw_rect                   =*/ simgraph16_draw_rect,
 	/*.draw_rect_clipped           =*/ simgraph16_draw_rect_clipped,
+	/*.draw_rect_colors_clipped    =*/ simgraph16_draw_rect_colors_clipped,
 	/*.draw_rounded_rect_clipped   =*/ simgraph16_draw_rounded_rect_clipped,
 	/*.draw_vline_clipped          =*/ simgraph16_draw_vline_clipped,
 	/*.flush_framebuffer           =*/ simgraph16_flush_framebuffer,
@@ -733,6 +730,13 @@ static rgb888_t simgraph16_get_color_rgb(palette_index_t idx)
 	// Return black for anything else
 	return rgb888_t{0,0,0};
 }
+
+
+rgb888_t simgraph16_get_pixval_rgb(PIXVAL c)
+{
+	return pixval_to_rgb888(c);
+}
+
 
 /**
  * Convert indexed colors to rgb and back
@@ -1420,7 +1424,7 @@ static void rezoom_img(const image_id n)
 				free( rezoom_baseimage[n % env_t::num_threads] );
 				rezoom_size[n % env_t::num_threads] = new_size;
 				rezoom_baseimage[n % env_t::num_threads]  = MALLOCN( uint8, new_size );
-				rezoom_baseimage2[n % env_t::num_threads] = (PIXVAL *)MALLOCN( uint8, new_size );
+				rezoom_baseimage2[n % env_t::num_threads] = reinterpret_cast<PIXVAL *>(MALLOCN(uint8, new_size));
 			}
 			memset( rezoom_baseimage[n % env_t::num_threads], 255, new_size ); // fill with invalid data to mark transparent regions
 
@@ -1712,7 +1716,7 @@ static void rezoom_img(const image_id n)
 			}
 
 			// now encode the image again
-			dest = (PIXVAL*)rezoom_baseimage[n % env_t::num_threads];
+			dest = reinterpret_cast<PIXVAL *>(rezoom_baseimage[n % env_t::num_threads]);
 			for(  sint16 y = 0;  y < newzoomheight;  y++  ) {
 				PIXVAL *line = ((PIXVAL *)rezoom_baseimage2[n % env_t::num_threads]) + (y * newzoomwidth);
 				PIXVAL count;
@@ -2338,7 +2342,7 @@ static void display_img_nc(scr_coord_val h, const scr_coord_val xp, const scr_co
 						// aligned fast copy loop
 						bool const postalign = runlen & 1;
 						runlen >>= 1;
-						uint32 *ld = (uint32 *)p;
+						uint32 *ld = reinterpret_cast<uint32 *>(p);
 						while (runlen--) {
 #if defined _MSC_VER // MSVC can read unaligned
 							*ld++ = *(uint32 const *const)sp;
@@ -3549,7 +3553,7 @@ static void display_fb_internal(scr_coord_val xp, scr_coord_val yp, scr_coord_va
 			// aligned fast fill loop
 			bool const postalign = count & 1;
 			count >>= 1;
-			uint32 *lp = (uint32 *)p;
+			uint32 *lp = reinterpret_cast<uint32 *>(p);
 			while(count--) {
 				*lp++ = colvald;
 			}
@@ -3581,6 +3585,27 @@ static void simgraph16_draw_rect(scr_coord_val xp, scr_coord_val yp, scr_coord_v
 static void simgraph16_draw_rect_clipped(scr_coord_val xp, scr_coord_val yp, scr_coord_val w, scr_coord_val h, PIXVAL color, bool dirty  CLIP_NUM_DEF)
 {
 	display_fb_internal( xp, yp, w, h, color, dirty, CR.clip_rect.x, CR.clip_rect.xx, CR.clip_rect.y, CR.clip_rect.yy );
+}
+
+
+static void simgraph16_draw_rect_colors_clipped(scr_coord_val xp, scr_coord_val yp, scr_coord_val w, scr_coord_val h, PIXVAL *colors, scr_coord_val num_colors, bool horizontal, bool dirty  CLIP_NUM_DEF)
+{
+	if (horizontal) {
+		scr_coord_val last_w = 0;
+		for (scr_coord_val i = 0; i < num_colors; i++) {
+			scr_coord_val next_w = (w * (1 + i)) / num_colors;
+			display_fb_internal(xp+last_w, yp, next_w-last_w, h, colors[i], dirty, CR.clip_rect.x, CR.clip_rect.xx, CR.clip_rect.y, CR.clip_rect.yy);
+			last_w = next_w;
+		}
+	}
+	else {
+		scr_coord_val last_h = 0;
+		for (scr_coord_val i = 0; i < num_colors; i++) {
+			scr_coord_val next_h = (h * (1 + i)) / num_colors;
+			display_fb_internal(xp, yp+last_h, w, next_h-last_h, colors[i], dirty, CR.clip_rect.x, CR.clip_rect.xx, CR.clip_rect.y, CR.clip_rect.yy);
+			last_h = next_h;
+		}
+	}
 }
 
 
@@ -4810,20 +4835,8 @@ static void simgraph16_on_window_resized(scr_size new_window_size)
 /**
  * Take Screenshot
  */
-static bool simgraph16_take_screenshot(const scr_rect &area)
+static bool simgraph16_take_screenshot(const scr_rect &area, const char *filename)
 {
-	if (access(SCREENSHOT_PATH_X, W_OK) == -1) {
-		return false; // directory not accessible
-	}
-
-	static int number = 0;
-	char filename[80];
-
-	// find the first not used screenshot image
-	do {
-		sprintf(filename, SCREENSHOT_PATH_X "simscr%02d.png", number++);
-	} while (access(filename, W_OK) != -1);
-
 	// now save the screenshot
 	scr_rect clipped_area = area;
 	clipped_area.clip(scr_rect(0, 0, disp_actual_width, disp_height));

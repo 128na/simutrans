@@ -27,6 +27,7 @@
 #include "../obj/depot.h"
 #include "../simfab.h"
 #include "../display/simimg.h"
+#include "../pathes.h"
 #include "../simintr.h"
 #include "../simhalt.h"
 #include "../simskin.h"
@@ -95,6 +96,15 @@
 
 #include "../tool/simtool.h"
 #include "../player/finance.h"
+
+// for access()
+#ifdef _MSC_VER
+#	include <io.h>
+#	define W_OK 2
+#else
+#	include <unistd.h>
+#endif
+
 
 #define is_scenario()  welt->get_scenario()->is_scripted()
 
@@ -732,7 +742,7 @@ DBG_MESSAGE("tool_remover()",  "removing tunnel  from %d,%d,%d",gr->get_pos().x,
 		for (uint i = 0; i < gr->obj_count(); i++) {
 			obj_t* obj = gr->obj_bei(i);
 			if (obj->get_typ() == type) {
-				if(msg = obj->get_removal_error(player)) {
+				if ((msg = obj->get_removal_error(player)) != NULL) {
 					return false;
 				}
 				delete obj;
@@ -2554,14 +2564,16 @@ static const char *tool_schedule_insert_aux(karte_t *welt, player_t *player, koo
 	return NULL;
 }
 
+
 const char *tool_schedule_add_t::work( player_t *player, koord3d pos )
 {
-	return tool_schedule_insert_aux( welt, player, pos, (schedule_t*)const_cast<char *>(default_param), true );
+	return tool_schedule_insert_aux( welt, player, pos, reinterpret_cast<schedule_t *>(const_cast<char *>(default_param)), true );
 }
+
 
 const char *tool_schedule_ins_t::work( player_t *player, koord3d pos )
 {
-	return tool_schedule_insert_aux( welt, player, pos, (schedule_t*)const_cast<char *>(default_param), false );
+	return tool_schedule_insert_aux( welt, player, pos, reinterpret_cast<schedule_t *>(const_cast<char *>(default_param)), false );
 }
 
 
@@ -2815,7 +2827,10 @@ const char *tool_build_way_t::calc_route( way_builder_t &bauigel, const koord3d 
 	if(  is_shift_pressed()  &&  (desc->get_styp() == type_elevated  &&  desc->get_wtyp() != air_wt)  ) {
 		grund_t *gr=welt->lookup(my_end);
 		if(  gr->get_weg( desc->get_waytype() )  ) {
-			my_end.z -= welt->get_settings().get_way_height_clearance();
+			// find the base ground this elevated way was built above; this accounts for the
+			// extra height added on bridge ramp connection tiles (see grund_t::get_bridge_slope_extra_height)
+			grund_t *base_gr = bauigel.find_base_for_elevated(my_end);
+			my_end = base_gr ? base_gr->get_pos() : my_end - koord3d(0, 0, welt->get_settings().get_way_height_clearance());
 		}
 	}
 
@@ -2917,7 +2932,8 @@ void tool_build_way_t::mark_tiles(player_t* player, const koord3d& start, const 
 	const char* err = calc_route(bauigel, start, end);
 	bool keep_city_roads = is_shift_pressed() && desc->get_styp() == type_flat && desc->get_wtyp() == road_wt;
 
-	uint8 offset = (desc->get_styp() == type_elevated && desc->get_wtyp() != air_wt) ? welt->get_settings().get_way_height_clearance() : 0;
+	bool is_elevated = desc->get_styp() == type_elevated && desc->get_wtyp() != air_wt;
+	uint8 offset = is_elevated ? welt->get_settings().get_way_height_clearance() : 0;
 
 	if (bauigel.get_count() > 1) {
 		// Set tooltip first (no dummygrounds, if bauigel.calc_casts() is called).
@@ -2925,12 +2941,15 @@ void tool_build_way_t::mark_tiles(player_t* player, const koord3d& start, const 
 
 		// make dummy route from bauigel
 		for (uint32 j = 0; j < bauigel.get_count(); j++) {
-			koord3d pos = bauigel.get_route()[j] + koord3d(0, 0, offset);
+			koord3d base_pos = bauigel.get_route()[j];
+			grund_t* base_gr = welt->lookup(base_pos);
+			sint8 extra_h = (is_elevated && base_gr) ? base_gr->get_bridge_slope_extra_height() : 0;
+			koord3d pos = base_pos + koord3d(0, 0, offset + extra_h);
 			grund_t* gr = welt->lookup(pos);
 			if (!gr) {
 				gr = new monorailboden_t(pos, slope_t::flat);
 				// should only be here when elevated/monorail, therefore will be at height offset above ground
-				gr->set_grund_hang(welt->lookup(pos - koord3d(0, 0, offset))->get_grund_hang());
+				gr->set_grund_hang(base_gr->get_weg_hang());
 				welt->access(pos.get_2d())->boden_hinzufuegen(gr);
 			}
 			if (gr->is_water()) {
@@ -2954,7 +2973,7 @@ void tool_build_way_t::mark_tiles(player_t* player, const koord3d& start, const 
 				if (ribi_t::all == zeige) {
 
 					// a little more effor to find out if diagonal
-					ribi_t::ribi r[4], r0 = 0;
+					ribi_t::ribi r[4];
 					uint8 non_bent = 0;
 					for (uint8 i = 0; i < 4; i++) {
 						r[i] = 0;
@@ -4092,9 +4111,26 @@ const char *tool_build_wayobj_t::do_work( player_t* player, const koord3d &start
 							}
 						}
 						else {
-							wo->set_dir(dir);
 							wo->calc_cached_image();
+							wo->set_dir(dir);
 						}
+					}
+				}
+			}
+		}
+	}
+	// recalculate images along the route as we may have diagoanl images
+	if (build) {
+		koord3d_vector_t const& r = verbindung.get_route();
+		// in principle one coudl conly recalc threeways and bend ribis ...
+		for (uint32 i = 0; i < verbindung.get_count(); i++) {
+			grund_t* gr = welt->lookup(r[i]);
+			for (int n = 0; n < gr->obj_count(); n++) {
+				obj_t* obj = gr->obj_bei(n);
+				if (obj && obj->get_typ() == obj_t::wayobj) {
+					wayobj_t* wo = static_cast<wayobj_t*>(obj);
+					if (wo->get_waytype() == wt) {
+						wo->calc_cached_image();
 					}
 				}
 			}
@@ -6192,7 +6228,13 @@ const char *tool_build_land_chain_t::work( player_t *player, koord3d pos )
 	if(hat_platz) {
 		// eventually adjust production
 		koord3d build_pos = gr->get_pos();
-		int count = factory_builder_t::build_link(NULL, fab, initial_prod, rotation, &build_pos, welt->get_public_player(), 10000, ignore_climates);
+		factory_desc_t::site_t placement = fab->get_placement();
+		// if climates are ignored, then special placements as well => either Land, water, or City
+		if (ignore_climates && placement >= factory_desc_t::City) {
+			// ignore Shore, River, Forest to Land
+			placement = factory_desc_t::Land;
+		}
+		int count = factory_builder_t::build_link(NULL, fab, initial_prod, rotation, &build_pos, welt->get_public_player(), 10000, ignore_climates, placement);
 
 		if(count>0) {
 			// at least one factory has been built
@@ -6261,9 +6303,15 @@ const char *tool_city_chain_t::work( player_t *player, koord3d pos )
 
 	// process ignore climates switch
 	bool ignore_climates = default_param  &&  default_param[0]=='1';
+	factory_desc_t::site_t placement = fab->get_placement();
+	// if climates are ignored, then special placements as well => either Land, water, or City
+	if (ignore_climates && placement >= factory_desc_t::City) {
+		// ignore Shore, River, Forest to Land
+		placement = factory_desc_t::Land;
+	}
 
 	pos = gr->get_pos();
-	int count = factory_builder_t::build_link(NULL, fab, initial_prod, 0, &pos, welt->get_public_player(), 10000, ignore_climates);
+	int count = factory_builder_t::build_link(NULL, fab, initial_prod, 0, &pos, welt->get_public_player(), 10000, ignore_climates, placement);
 	if(count>0) {
 		// at least one factory has been built
 		welt->get_viewport()->change_world_position( pos );
@@ -7126,8 +7174,11 @@ const char *tool_make_stop_public_t::work( player_t *player, koord3d p )
 	}
 
 	// change ownership
-	halt->change_owner( welt->get_public_player() );
-	halt->merge_halt( merge_to );
+	sint32 tiles = halt->change_owner( welt->get_public_player(), player );
+	halt->merge_halt(merge_to);
+	if (!merge_to.is_bound() && tiles == 0) {
+		return NOTICE_WRONG_OWNER;
+	}
 
 	return NULL;
 }
@@ -7199,7 +7250,7 @@ void tool_merge_stop_t::mark_tiles( player_t *player, const koord3d &start, cons
 		}
 	}
 
-	if(  distance  < welt->get_settings().allow_merge_distant_halt  ) {
+	if(  distance < welt->get_settings().allow_merge_distant_halt  ) {
 		distance = clamp(distance,2u,33u)-2;
 		workcost = welt->scale_with_month_length( (1<<distance) * welt->get_settings().cst_multiply_merge_halt );
 		win_set_static_tooltip( tooltip_with_price("Building costs estimates", workcost) );
@@ -7230,7 +7281,12 @@ const char *tool_merge_stop_t::do_work( player_t *player, const koord3d &last_po
 
 	for(haltestelle_t::tile_t const& i : halt_be_merged_from->get_tiles()) {
 		for(haltestelle_t::tile_t const& j : halt_be_merged_to->get_tiles()) {
-			uint32 dist = koord_distance( i.grund->get_pos(), j.grund->get_pos() );
+			koord dx = i.grund->get_pos().get_2d() - j.grund->get_pos().get_2d();
+			uint32 dist = koord_distance(i.grund->get_pos(), j.grund->get_pos());
+			if (dx.x  &&  dx.y) {
+				// diagonal => get one unit tolerance so that (+1,+1) is actuall only 1 distance
+				dist --;
+			}
 			if(  dist < distance  ) {
 				distance = dist;
 				if(  distance <= 1  ) {
@@ -7539,13 +7595,12 @@ bool tool_show_underground_t::init( player_t * )
 	koord3d zpos = welt->get_zeiger()->get_pos();
 	// move zeiger (pointer) to invalid position -> unmark tiles
 	welt->get_zeiger()->change_pos( koord3d::invalid);
-
-	sint8 old_underground_level = grund_t::underground_level;
+	if (save_underground_level == -128) {
+		save_underground_level = zpos.z;
+	}
 
 	// map needs update?
 	bool ok = true;
-	// need an extra click?
-	bool needs_click = false;
 
 	// default default-param = U for backward compatibility
 	if (default_param == NULL) {
@@ -7553,35 +7608,36 @@ bool tool_show_underground_t::init( player_t * )
 	}
 	// now check the default parameter
 	switch(default_param[0]) {
+
 		// toggle sliced view by toolbar - height taken from extra mouse click
 		case 'C':
 			if(grund_t::underground_mode==grund_t::ugm_level) {
-				grund_t::set_underground_mode( grund_t::ugm_none, 0);
-			}
-			else if(grund_t::underground_mode==grund_t::ugm_none) {
-				needs_click = true;
-				ok = false;
+				grund_t::set_underground_mode( grund_t::ugm_none, save_underground_level);
 			}
 			else {
-				ok = false;
+				grund_t::set_underground_mode(grund_t::ugm_level, save_underground_level);
 			}
 			break;
+
 		// decrease slice level
 		case 'D':
 			if(grund_t::underground_mode==grund_t::ugm_level) {
 				if(  grund_t::underground_level > welt->min_height  ) {
 					grund_t::underground_level --;
+					save_underground_level = grund_t::underground_level;
 				}
 			}
 			else {
 				ok = false;
 			}
 			break;
+
 		// increase slice level
 		case 'I':
 			if(grund_t::underground_mode==grund_t::ugm_level) {
 				if(  grund_t::underground_level < welt->max_height  ) {
 					grund_t::underground_level ++;
+					save_underground_level = grund_t::underground_level;
 				}
 			}
 			else {
@@ -7593,29 +7649,35 @@ bool tool_show_underground_t::init( player_t * )
 		case 'K':
 			if(grund_t::underground_mode==grund_t::ugm_level) {
 				// switch to normal or full-underground
-				grund_t::set_underground_mode( grund_t::ugm_none, 0);
-			}
-			else if(grund_t::underground_mode==grund_t::ugm_none) {
-				grund_t::set_underground_mode( grund_t::ugm_level, zpos.z);
+				grund_t::set_underground_mode( grund_t::ugm_none, save_underground_level);
 			}
 			else {
-				ok = false;
+				grund_t::set_underground_mode( grund_t::ugm_level, save_underground_level);
 			}
 			break;
 
-		//  switch between full underground or normal/sliced view
-		case 'U':
-			if (grund_t::underground_mode==grund_t::ugm_all) {
+		//  rotate through full underground/sliced/normal view
+		case 'T':
+			if (grund_t::underground_mode == grund_t::ugm_all) {
 				// check if the old level is valid then switch back to sliced view
-				if (-128<save_underground_level && save_underground_level<127) {
-					grund_t::set_underground_mode(grund_t::ugm_level, save_underground_level);
-				}
-				else {
-					grund_t::set_underground_mode(grund_t::ugm_none, 0);
-				}
+				save_underground_level = zpos.z;
+				grund_t::set_underground_mode(grund_t::ugm_level, save_underground_level);
+			}
+			else if (grund_t::underground_mode == grund_t::ugm_level) {
+				grund_t::set_underground_mode(grund_t::ugm_none, save_underground_level);
 			}
 			else {
-				grund_t::set_underground_mode( grund_t::ugm_all, 0);
+				grund_t::set_underground_mode(grund_t::ugm_all, save_underground_level);
+			}
+			break;
+
+		//  switch between full underground or normal view
+		case 'U':
+			if (grund_t::underground_mode==grund_t::ugm_all) {
+				grund_t::set_underground_mode(grund_t::ugm_none, save_underground_level);
+			}
+			else {
+				grund_t::set_underground_mode(grund_t::ugm_all, save_underground_level);
 			}
 			break;
 
@@ -7626,28 +7688,9 @@ bool tool_show_underground_t::init( player_t * )
 	}
 
 	// move zeiger (pointer) back
-	welt->get_zeiger()->change_pos( zpos);
+	welt->get_zeiger()->change_pos(zpos);
 
 	if (ok) {
-		save_underground_level = old_underground_level;
-
-		// renew toolbar
-		tool_t::update_toolbars();
-
-		// recalc all images on map
-		welt->update_underground();
-	}
-	return needs_click;
-}
-
-
-bool tool_show_underground_t::exit( player_t* )
-{
-	if(  grund_t::underground_mode != grund_t::ugm_none  ) {
-
-		// reset no normal view on deselect
-		grund_t::set_underground_mode( grund_t::ugm_none, 0 );
-
 		// renew toolbar
 		tool_t::update_toolbars();
 
@@ -7657,30 +7700,26 @@ bool tool_show_underground_t::exit( player_t* )
 	return false;
 }
 
-
-const char *tool_show_underground_t::work( player_t *player, koord3d pos)
+bool tool_show_underground_t::exit(player_t*)
 {
-	koord3d zpos = welt->get_zeiger()->get_pos();
-	// move zeiger (pointer) to invalid position -> unmark tiles
-	welt->get_zeiger()->change_pos( koord3d::invalid);
+	if (grund_t::underground_mode!=grund_t::ugm_none) {
 
-	save_underground_level = grund_t::underground_level;
-	grund_t::set_underground_mode( grund_t::ugm_level, pos.z);
+		koord3d zpos = welt->get_zeiger()->get_pos();
+		// move zeiger (pointer) to invalid position -> unmark tiles
+		welt->get_zeiger()->change_pos(koord3d::invalid);
 
-	// move zeiger (pointer) back
-	welt->get_zeiger()->change_pos( zpos);
+		grund_t::set_underground_mode(grund_t::ugm_none, 0);
 
-	// renew toolbar
-	tool_t::update_toolbars();
+		// renew toolbar
+		tool_t::update_toolbars();
 
-	// recalc all images on map
-	welt->update_underground();
+		// recalc all images on map
+		welt->update_underground();
 
-	if(player == welt->get_active_player()) {
-		welt->set_tool( general_tool[TOOL_QUERY], player );
+		// move zeiger (pointer) back
+		welt->get_zeiger()->change_pos(zpos);
 	}
-
-	return NULL;
+	return true;
 }
 
 
@@ -7693,7 +7732,9 @@ char const* tool_show_underground_t::get_tooltip(player_t const*) const
 	// now check the default parameter
 	switch(default_param[0]) {
 		// toggle sliced view by toolbar - height taken from extra mouse click
+		// toggle sliced view by keyboard - height taken from cursor
 		case 'C':
+		case 'K':
 			return translator::translate("sliced underground mode");
 		// decrease slice level
 		case 'D':
@@ -7701,9 +7742,9 @@ char const* tool_show_underground_t::get_tooltip(player_t const*) const
 		// increase slice level
 		case 'I':
 			return translator::translate("increase underground view level");
-		// toggle sliced view by keyboard - height taken from cursor
-		case 'K':
-			return translator::translate("sliced underground mode");
+		//  toggle between full underground sliced and normal view
+		case 'T':
+			return translator::translate(grund_t::underground_mode == grund_t::ugm_all ? "sliced underground mode" : "underground mode");
 		//  switch between full underground or normal/sliced view
 		case 'U':
 		default:
@@ -7732,8 +7773,11 @@ bool tool_show_underground_t::is_selected() const
 		case 'K':
 			return grund_t::underground_mode==grund_t::ugm_level;
 		//  switch between full underground or normal/sliced view
+		case 'T':
+			return grund_t::underground_mode!= grund_t::ugm_none;
+		//  switch between full underground or normal/sliced view
 		case 'U':
-			return grund_t::underground_mode==grund_t::ugm_all;
+			return grund_t::underground_mode == grund_t::ugm_all;
 	}
 	return false;
 }
@@ -7803,18 +7847,25 @@ bool tool_toggle_reservation_t::is_selected() const
 
 bool tool_screenshot_t::init( player_t * )
 {
-	bool ok;
-	const scr_rect screen_area = { { 0, 0 }, gfx->get_screen_size() };
+	if (access(SCREENSHOT_PATH_X, W_OK) == -1) {
+		return false; // directory not accessible
+	}
+
+	static int number = 0;
+	char filename[80];
+
+	// find the first not used screenshot image
+	do {
+		sprintf(filename, SCREENSHOT_PATH_X "simscr%02d.png", number++);
+	} while (access(filename, W_OK) != -1);
+
 	const gui_frame_t *topwin = win_get_top();
 
-	if(  is_ctrl_pressed()  &&  topwin != NULL  ) {
-		ok = gfx->take_screenshot(scr_rect(win_get_pos(topwin), topwin->get_windowsize()));
-	}
-	else {
-		ok = gfx->take_screenshot(screen_area);
-	}
+	const scr_rect area = is_ctrl_pressed()  &&  topwin != NULL ?
+		scr_rect(win_get_pos(topwin), topwin->get_windowsize()) :
+		scr_rect{ { 0, 0 }, gfx->get_screen_size() };
 
-	if (ok) {
+	if (gfx->take_screenshot(area, filename)) {
 		create_win( new news_img("Screenshot\ngespeichert.\n"), w_time_delete, magic_none);
 	}
 	else {

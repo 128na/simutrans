@@ -452,9 +452,14 @@ bool weg_t::check_season(const bool calc_only_season_change)
 
 	if(  is_close_diagonal()  ) {
 		// double diagonals
-		set_images(image_close_diagonal, is_close_diagonal(), snow);
+		if (desc->has_close_diagonal_image()) {
+			set_images(image_close_diagonal, is_close_diagonal(), snow);
+		}
+		else {
+			set_images(image_diagonal, is_close_diagonal() == 1 ? ribi_t::southeast : ribi_t::northeast, snow);
+		}
 	}
-	if(  is_diagonal()  ) {
+	else if(  is_diagonal()  ) {
 		set_images( image_diagonal, ribi, snow );
 	}
 	else if(  ribi_t::is_threeway( ribi )  &&  desc->get_waytype()!=road_wt  ) {
@@ -669,7 +674,8 @@ void weg_t::check_diagonal()
 	ribi_t::ribi r2 = ribi_t::none;
 
 	if (ribi_t::all == ribi) {
-		ribi_t::ribi r[4], r0=0;
+		// fourway ribi => could be close diagonals
+		ribi_t::ribi r[4];
 		uint8 non_bent = 0;
 		for (uint8 i = 0; i < 4; i++) {
 			if (!from->get_neighbour(to, get_waytype(), ribi_t::nesw[i])) {
@@ -703,6 +709,7 @@ void weg_t::check_diagonal()
 	}
 
 	// from now bends:
+	ribi_t::ribi rback = ribi_t::backward(ribi);
 
 	// get the ribis of the ways that connect to us
 	// r1 will be 45 degree clockwise ribi (eg northeast->east), r2 will be anticlockwise ribi (eg northeast->north)
@@ -714,13 +721,12 @@ void weg_t::check_diagonal()
 		r2 = to->get_weg_ribi_unmasked(get_waytype());
 	}
 
-	if (ribi_t::is_threeway(r1) && ribi_t::is_threeway(r2)) {
+	diagonal = (r1 == rback || ribi_t::is_threeway(r1)) && (r2 == rback || ribi_t::is_threeway(r2));
+	if ((ribi_t::is_straight(r1) && r2 == rback) || (ribi_t::is_straight(r2) && r1 == rback)) {
+		// start and end tile handling
 		diagonal = true;
 	}
-	else {
-		// diagonal if r1 or r2 are our reverse and neither one is 90 degree rotation of us
-		diagonal = (r1 == ribi_t::backward(ribi) || r2 == ribi_t::backward(ribi)) && r1 != ribi_t::rotate90l(ribi) && r2 != ribi_t::rotate90(ribi);
-	}
+
 	diagonal_flag = diagonal;
 }
 
