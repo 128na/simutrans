@@ -646,9 +646,11 @@ bool private_car_t::ist_weg_frei(grund_t *gr)
 	}
 
 	// merge control: a yield sign in front of the junction makes us wait for the traffic heading
-	// to it on the other roads. Decided before any tile is reserved.
+	// to it on the other roads. Decided before any tile is reserved. The exit check only applies to
+	// convoys, whose tail may be left on the junction.
 	if(  const grund_t *gr_here = welt->lookup(get_pos())  ) {
-		if(  merge_control_t::get_yield_sign(gr_here, gr)  ) {
+		const roadsign_t *ms = merge_control_t::get_merge_sign(gr_here, gr);
+		if(  ms  &&  ms->is_merge_yield()  ) {
 			const bool on_passing_lane = next_lane==1 ? true : next_lane==-1 ? false : is_overtaking();
 			if(  merge_control_t::must_yield(this, gr_here, gr, pos_next_next, on_passing_lane)  ) {
 				merge_stats_t::add(merge_stats_t::YIELD_WAITS);

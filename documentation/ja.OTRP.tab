@@ -984,3 +984,7 @@ Yield at the junction ahead
 この先の交差点で譲る
 Wait while a vehicle on the other roads approaches the junction on the same lane or across our path
 ほかの道から同じ車線か進路を横切って交差点へ近づく車がいる間は待つ
+Enter only when the convoy fits behind the junction
+交差点の先に編成が収まるときだけ進入する
+Wait while a stopped vehicle behind the junction would leave the tail of the convoy on it
+交差点の先に止まっている車がいて、編成の後ろが交差点に残りそうな間は待つ

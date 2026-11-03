@@ -55,7 +55,8 @@ protected:
 		length_based		= 1U<<8, // in choose signal, length based find_route(do not enter the first found tile, the shortest halt which can enter the convoys).
 		detailed_oneway	= 1U<<9, // per-entry-direction exit ribi table stored in ticks_ns/ticks_ow (only meaningful for single_way signs)
 		ignore_length = 1U<<10, 	 // ignore length (for track)
-		merge_yield   = 1U<<11   // single_way road sign in front of a junction: give way to the traffic already on the joined road
+		merge_yield   = 1U<<11,  // single_way road sign in front of a junction: give way to the traffic already on the joined road
+		merge_exit_clear = 1U<<12 // single_way road sign in front of a junction: enter only when the convoy fits behind it
 	};
 
 	uint8 choose_signal_margin_length;
@@ -217,6 +218,8 @@ public:
 	// merge control at the junction right behind this sign, see merge_control_t
 	bool is_merge_yield() const { return (choose_sign_flag&merge_yield)>0; }
 	void set_merge_yield(bool tf) { tf? choose_sign_flag|=merge_yield: choose_sign_flag&=~merge_yield; }
+	bool is_merge_exit_clear() const { return (choose_sign_flag&merge_exit_clear)>0; }
+	void set_merge_exit_clear(bool tf) { tf? choose_sign_flag|=merge_exit_clear: choose_sign_flag&=~merge_exit_clear; }
 
 	// When detailed_oneway is set, ticks_ns/ticks_ow store 4-bit packed allowed-exit ribis per entry direction.
 	// ticks_ns bits 0-3 = allowed exits for entry ribi N, bits 4-7 = allowed exits for entry ribi S.

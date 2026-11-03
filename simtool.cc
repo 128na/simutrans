@@ -10897,6 +10897,7 @@ bool tool_change_traffic_light_t::init( player_t *player )
  * w:set two_ways flag on signal (allow convoys to pass from reverse direction)
  * i:set ignore lentgh
  * y:set merge yield on a one-way road sign in front of a junction
+ * x:set merge exit clear (enter only when the convoy fits behind the junction) on such a sign
  */
 bool tool_change_roadsign_t::init( player_t *player )
 {
@@ -11146,6 +11147,21 @@ bool tool_change_roadsign_t::init( player_t *player )
 			if(  roadsign_t *rs = gr->find<roadsign_t>()  ) {
 				if(  rs->get_desc()->is_single_way()  &&  rs->get_waytype()==road_wt  &&  player_t::check_owner(rs->get_owner(), player)  ) {
 					rs->set_merge_yield(inst != 0);
+					onewaysign_info_t* win = (onewaysign_info_t*)win_get_magic((ptrdiff_t)rs);
+					if(  win  ) {
+						win->update_data();
+					}
+				}
+			}
+		}
+		break;
+
+		case 'x':
+		// merge control: convoys enter the junction behind this one-way road sign only when they fit behind it
+		if(  grund_t *gr = welt->lookup(pos)  ) {
+			if(  roadsign_t *rs = gr->find<roadsign_t>()  ) {
+				if(  rs->get_desc()->is_single_way()  &&  rs->get_waytype()==road_wt  &&  player_t::check_owner(rs->get_owner(), player)  ) {
+					rs->set_merge_exit_clear(inst != 0);
 					onewaysign_info_t* win = (onewaysign_info_t*)win_get_magic((ptrdiff_t)rs);
 					if(  win  ) {
 						win->update_data();

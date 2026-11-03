@@ -26,6 +26,9 @@ uint8 merge_control_t::yield_lookahead = 1;
 // longest lookahead accepted by set_yield_lookahead()
 #define MAX_YIELD_LOOKAHEAD 3
 
+// how many tiles beyond the length of the convoy the exit check looks for a place to stop
+#define MAX_EXIT_EXTRA_TILES 8
+
 
 void merge_control_t::set_yield_lookahead(uint8 tiles)
 {
@@ -47,14 +50,14 @@ static bool is_junction(const grund_t *gr)
 }
 
 
-const roadsign_t *merge_control_t::get_yield_sign(const grund_t *from, const grund_t *junction)
+const roadsign_t *merge_control_t::get_merge_sign(const grund_t *from, const grund_t *junction)
 {
 	const weg_t *w = from ? from->get_weg(road_wt) : NULL;
 	if(  !w  ||  !w->has_sign()  ) {
 		return NULL;
 	}
 	const roadsign_t *rs = from->find<roadsign_t>();
-	if(  !rs  ||  !rs->is_merge_yield()  ||  rs->get_governed_waytype() != road_wt  ||  !rs->get_desc()->is_single_way()  ) {
+	if(  !rs  ||  !(rs->is_merge_yield()  ||  rs->is_merge_exit_clear())  ||  rs->get_governed_waytype() != road_wt  ||  !rs->get_desc()->is_single_way()  ) {
 		return NULL;
 	}
 	if(  koord_distance(from->get_pos(), junction->get_pos()) != 1  ||  !is_junction(junction)  ) {
@@ -297,4 +300,82 @@ uint32 merge_stats_t::get_lane_passes(koord3d pos, bool passing_lane)
 sint64 merge_stats_t::now_us()
 {
 	return (sint64)std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+
+/// is @p other @p cnv itself or one of the convoys coupled behind it?
+static bool is_own_convoy(const convoi_t *cnv, const convoi_t *other)
+{
+	for(  convoihandle_t c = cnv->self;  c.is_bound();  c = c->get_coupling_convoi()  ) {
+		if(  c.get_rep() == other  ) {
+			return true;
+		}
+	}
+	return false;
+}
+
+
+/// is there a vehicle standing on @p gr that is not part of @p cnv and does not drive against @p dir?
+static bool has_stopped_vehicle(const grund_t *gr, const convoi_t *cnv, ribi_t::ribi dir)
+{
+	const uint8 top = gr->get_top();
+	for(  uint8 pos = 1;  pos < top;  pos++  ) {
+		vehicle_base_t *v = obj_cast<vehicle_base_t>(gr->obj_bei(pos));
+		if(  !v  ) {
+			continue;
+		}
+		if(  road_vehicle_t *rv = obj_cast<road_vehicle_t>(v)  ) {
+			const convoi_t *ocnv = rv->get_convoi();
+			if(  !ocnv  ||  is_own_convoy(cnv, ocnv)  ||  ocnv->get_akt_speed() > kmh_to_speed(1)  ) {
+				continue;
+			}
+		}
+		else if(  private_car_t *car = obj_cast<private_car_t>(v)  ) {
+			if(  car->get_current_speed() > kmh_to_speed(1)  ) {
+				continue;
+			}
+		}
+		else {
+			continue;
+		}
+		if(  v->get_90direction() == ribi_t::backward(dir)  ) {
+			// oncoming lane of a two-way road
+			continue;
+		}
+		return true;
+	}
+	return false;
+}
+
+
+bool merge_control_t::exit_blocked(const road_vehicle_t *self, const route_t *route, uint32 junction_index)
+{
+	merge_stats_t::add(merge_stats_t::EXIT_CHECKS);
+	merge_timer_t timer(merge_stats_t::EXIT_TIME_US);
+
+	const convoi_t *cnv = self->get_convoi();
+	// coupled convoys drive as one
+	const uint32 needed = (cnv->get_entire_convoy_length() + CARUNITS_PER_TILE - 1) / CARUNITS_PER_TILE;
+	// Look for `needed` tiles in a row that are not junctions: the convoy may stop there without
+	// blocking anybody. Any stopped vehicle up to there would make us stop earlier.
+	uint32 free_run = 0;
+	const uint32 last = junction_index + needed + MAX_EXIT_EXTRA_TILES;
+	for(  uint32 i = junction_index + 1;  i < route->get_count()  &&  i <= last;  i++  ) {
+		const grund_t *gr = welt->lookup(route->at((uint16)i));
+		if(  !gr  ) {
+			// the way is gone: the usual checks will find a new route
+			return false;
+		}
+		if(  has_stopped_vehicle(gr, cnv, ribi_type(route->at((uint16)(i - 1)), route->at((uint16)i)))  ) {
+			return true;
+		}
+		if(  is_junction(gr)  ) {
+			free_run = 0;
+		}
+		else if(  ++free_run >= needed  ) {
+			return false;
+		}
+	}
+	// the route ends, or there is no such place nearby (e.g. on a small roundabout): do not wait
+	return false;
 }
