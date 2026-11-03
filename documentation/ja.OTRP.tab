@@ -988,3 +988,17 @@ Enter only when the convoy fits behind the junction
 交差点の先に編成が収まるときだけ進入する
 Wait while a stopped vehicle behind the junction would leave the tail of the convoy on it
 交差点の先に止まっている車がいて、編成の後ろが交差点に残りそうな間は待つ
+Set up the entrances of a roundabout
+ラウンドアバウトの入口をまとめて設定
+Select the 4x4 area whose edge is the roundabout
+外周が環道になっている4×4の範囲を選んでください
+The edge of the area is not a road driven around in the driving direction only
+範囲の外周が、通行方向にだけ回れる道路になっていません
+No road leads into the roundabout
+環道へ入る道路がありません
+A one-way sign cannot be set up in front of an entrance
+入口の手前に一方通行標識を置けない所があります
+No one-way road sign available
+使える一方通行標識がありません
+A road at the roundabout can be driven both into and out of it
+環道へ入ることも出ることもできる道路がつながっています
