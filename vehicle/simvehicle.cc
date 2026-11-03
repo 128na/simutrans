@@ -64,6 +64,7 @@
 
 #include "simvehicle.h"
 #include "simroadtraffic.h"
+#include "merge_control.h"
 
 
 /* get dx and dy from dir (just to remind you)
@@ -1251,6 +1252,13 @@ bool vehicle_t::can_enter_tile(sint32 &restart_speed, uint8 second_check_count)
 {
 	grund_t *gr = welt->lookup( pos_next );
 	if(  gr  ) {
+		// measure only the top level call of road convoys: the recursive checks of the convoys
+		// ahead are part of its time and must not be counted a second time
+		const bool measure = !second_check_count  &&  get_waytype()==road_wt;
+		if(  measure  ) {
+			merge_stats_t::add(merge_stats_t::ENTER_CHECKS);
+		}
+		merge_timer_t timer( measure ? merge_stats_t::ENTER_TIME_US : merge_stats_t::MAX_COUNTER );
 		if(  can_enter_tile( gr, restart_speed, second_check_count )  ) {
 			// the vehicle can enter tile.
 			return true;
@@ -4131,6 +4139,7 @@ void road_vehicle_t::enter_tile(grund_t* gr)
 	}
 	if(  leading  ){
 		cnv->update_tiles_overtaking();
+		merge_stats_t::book_lane_pass(gr->get_pos(), cnv->is_overtaking());
 		// The lane forced by a physical reversal in vorfahren() has to last while the convoy is still
 		// in the stop it reversed in: on a stop longer than one tile it is otherwise merging back
 		// into the traffic lane inside the station, i.e. jumping sideways between platform tiles.

@@ -36,6 +36,7 @@
 
 
 #include "../utils/cbuffer_t.h"
+#include "merge_control.h"
 
 /**********************************************************************************************************************/
 /* Road users (private cars and pedestrians) basis class from here on */
@@ -1120,6 +1121,7 @@ void private_car_t::enter_tile(grund_t* gr)
 		set_tiles_overtaking(3);
 		next_lane = 0;
 	}
+	merge_stats_t::book_lane_pass(gr->get_pos(), is_overtaking());
 	//decide if overtaking citycar should go back to the traffic lane.
 	if(  get_tiles_overtaking() == 1  &&  str->get_overtaking_mode() <= oneway_mode  ){
 		vehicle_base_t* v = NULL;
@@ -1393,7 +1395,13 @@ grund_t* private_car_t::hop_check()
 		}
 	}
 
-	if(from  &&  ist_weg_frei(from)) {
+	bool free;
+	{
+		merge_stats_t::add(merge_stats_t::CITYCAR_CHECKS);
+		merge_timer_t timer(merge_stats_t::CITYCAR_TIME_US);
+		free = ist_weg_frei(from);
+	}
+	if(  free  ) {
 		// ok, this direction is fine!
 		ms_traffic_jam = 0;
 		if(current_speed<48) {

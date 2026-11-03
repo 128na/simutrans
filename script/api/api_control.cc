@@ -13,6 +13,7 @@
 #include "../../squirrel/sq_extensions.h"
 #include "../../simtool.h"
 #include "../../simworld.h"
+#include "../../vehicle/merge_control.h"
 
 namespace script_api {
 
@@ -38,6 +39,34 @@ namespace script_api {
 		sint32 new_multiplier = speed * 16;
 		welt->change_time_multiplier(new_multiplier - welt->get_time_multiplier());
 		return void_t();
+	}
+
+	void_t set_merge_stats_enabled(bool yesno)
+	{
+		merge_stats_t::set_enabled(yesno);
+		return void_t();
+	}
+
+	void_t reset_merge_stats()
+	{
+		merge_stats_t::reset();
+		return void_t();
+	}
+
+	sint64 get_merge_stat(const char *name)
+	{
+		return merge_stats_t::get(name);
+	}
+
+	void_t watch_lane_passes(koord3d pos)
+	{
+		merge_stats_t::watch_tile(pos);
+		return void_t();
+	}
+
+	uint32 get_lane_passes(koord3d pos, bool passing_lane)
+	{
+		return merge_stats_t::get_lane_passes(pos, passing_lane);
 	}
 };
 
@@ -112,6 +141,36 @@ void export_control(HSQUIRRELVM vm)
 	 * @param speed integer speed multiplier (1 = normal, 5 = five times normal speed)
 	 */
 	STATIC register_method(vm, &set_game_speed, "set_game_speed", false, true);
+
+	/**
+	 * Switches the road merge measurement on or off. It counts the entry checks of road
+	 * vehicles and the decisions at merges, and is meant for automated benchmarks.
+	 * The counters are not saved and do not influence the game.
+	 * @param yesno true to start counting
+	 */
+	STATIC register_method(vm, &set_merge_stats_enabled, "set_merge_stats_enabled", false, true);
+	/**
+	 * Clears all merge counters and lane pass counts. Watched tiles stay watched.
+	 */
+	STATIC register_method(vm, &reset_merge_stats, "reset_merge_stats", false, true);
+	/**
+	 * Reads one merge counter: enter_checks, enter_time_us, citycar_checks, citycar_time_us,
+	 * yield_checks, yield_waits, yield_time_us, exit_checks, exit_waits, exit_time_us.
+	 * @param name counter name
+	 * @returns counter value, -1 for an unknown name
+	 */
+	STATIC register_method(vm, &get_merge_stat, "get_merge_stat", false, true);
+	/**
+	 * Counts from now on which lane the vehicles use when they enter this tile.
+	 * @param pos tile to watch
+	 */
+	STATIC register_method(vm, &watch_lane_passes, "watch_lane_passes", false, true);
+	/**
+	 * @param pos watched tile
+	 * @param passing_lane true for the passing lane, false for the traffic lane
+	 * @returns number of vehicles (convoys count once) that entered the tile on this lane
+	 */
+	STATIC register_method(vm, &get_lane_passes, "get_lane_passes", false, true);
 
 	end_class(vm);
 }

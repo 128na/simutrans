@@ -635,6 +635,7 @@ SOURCES += utils/simstring.cc
 SOURCES += utils/simstring+money.cc
 SOURCES += utils/simthread.cc
 SOURCES += utils/thread_pool.cc
+SOURCES += vehicle/merge_control.cc
 SOURCES += vehicle/movingobj.cc
 SOURCES += vehicle/pedestrian.cc
 SOURCES += vehicle/simroadtraffic.cc
