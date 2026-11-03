@@ -561,6 +561,13 @@ call_tool_init set_signal_two_ways(player_t* pl, koord3d pos, int val)
 	return call_tool_init(TOOL_CHANGE_ROADSIGN | SIMPLE_TOOL, (const char*)buf, 0, pl);
 }
 
+call_tool_init set_sign_merge_yield(player_t* pl, koord3d pos, int val)
+{
+	cbuffer_t buf;
+	buf.printf("%hi,%hi,%hi,%hi,y", (sint16)pos.x, (sint16)pos.y, (sint16)pos.z, (sint16)val);
+	return call_tool_init(TOOL_CHANGE_ROADSIGN | SIMPLE_TOOL, (const char*)buf, 0, pl);
+}
+
 call_tool_work change_climate_at(player_t* pl, koord3d start, int climate)
 {
 	if (climate < water_climate || climate >= MAX_CLIMATES) {
@@ -827,6 +834,16 @@ void export_commands(HSQUIRRELVM vm)
 	 * @typemask string(player_x, coord3d, int)
 	 */
 	STATIC register_method(vm, set_signal_two_ways, "set_two_ways", false, true);
+	/**
+	 * Set or clear the "yield at the junction ahead" flag of a one-way road sign on the tile
+	 * right in front of a junction. Vehicles entering the junction from this tile then wait
+	 * while a vehicle on the other roads approaches it on the same lane or across their path.
+	 * @param pl  player who owns the sign
+	 * @param pos position of the sign
+	 * @param val 1 to enable, 0 to disable
+	 * @typemask bool(player_x, coord3d, int)
+	 */
+	STATIC register_method(vm, set_sign_merge_yield, "set_merge_yield", false, true);
 	/**
 	 * Build way-object.
 	 * @param pl player to pay for the work

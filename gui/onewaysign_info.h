@@ -68,6 +68,9 @@ class onewaysign_info_t : public obj_infowin_t, public action_listener_t
 		// convoy it wants to couple with is present in the target halt.
 		button_t bt_guide_signal;
 
+		// merge control at the junction right behind the sign (road only)
+		button_t bt_merge_yield;
+
 		// detailed_oneway toggle
 		button_t bt_detailed_oneway;
 
@@ -86,6 +89,7 @@ class onewaysign_info_t : public obj_infowin_t, public action_listener_t
 		button_t bt_exit[4][4];
 
 		bool has_intersection;
+		bool is_merge_entry; // road sign directly in front of a junction
 		bool has_choose;
 		bool is_multi_way; // true when underlying road/track has 3+ connections
 

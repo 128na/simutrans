@@ -2975,6 +2975,24 @@ bool road_vehicle_t::can_enter_tile(const grund_t *gr, sint32 &restart_speed, ui
 			}
 		}
 
+		// merge control: a yield sign in front of the junction makes us wait for the traffic heading
+		// to it on the other roads. Decided before any tile is reserved, and only the first check
+		// touches our state: the recursive checks of the convoys behind us just learn that we wait.
+		if(  const grund_t *gr_here = welt->lookup(get_pos())  ) {
+			if(  merge_control_t::get_yield_sign(gr_here, gr)  ) {
+				const koord3d to = route_index + 1u < r.get_count() ? r.at(route_index + 1u) : koord3d::invalid;
+				const bool on_passing_lane = next_lane==1 ? true : next_lane==-1 ? false : cnv->is_overtaking();
+				if(  merge_control_t::must_yield(this, gr_here, gr, to, on_passing_lane)  ) {
+					if(  !second_check_count  ) {
+						merge_stats_t::add(merge_stats_t::YIELD_WAITS);
+						restart_speed = 0;
+						cnv->reset_waiting();
+					}
+					return false;
+				}
+			}
+		}
+
 		vehicle_base_t *obj = NULL;
 		uint32 test_index = route_index;
 

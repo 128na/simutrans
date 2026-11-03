@@ -11,6 +11,43 @@
 #include "../dataobj/koord3d.h"
 #include "../tpl/vector_tpl.h"
 
+class grund_t;
+class roadsign_t;
+class vehicle_base_t;
+
+
+/**
+ * Merge control for road junctions, e.g. the entrances of a roundabout.
+ *
+ * The rules are set on a one-way sign on the tile right in front of the junction,
+ * so they apply to the vehicles entering the junction from that tile only:
+ * - yield: wait while a vehicle heading to the junction on another road would have to
+ *   share a lane with us or cross our path there.
+ *
+ * All checks are free of side effects, so they can be used in the recursive
+ * "can the convoy ahead move" checks as well.
+ */
+class merge_control_t
+{
+	static uint8 yield_lookahead;
+
+public:
+	/// @returns the sign with the yield rule for vehicles entering @p junction from @p from, or NULL
+	static const roadsign_t *get_yield_sign(const grund_t *from, const grund_t *junction);
+
+	/**
+	 * Decides whether @p self, standing on @p from, has to wait before entering @p junction.
+	 * @param to tile @p self heads for after the junction, koord3d::invalid if not known yet
+	 * @param passing_lane the lane @p self is going to use on the junction
+	 */
+	static bool must_yield(const vehicle_base_t *self, const grund_t *from, const grund_t *junction, koord3d to, bool passing_lane);
+
+	/// how many tiles of the other roads are looked at for approaching vehicles (1 = the tiles next to the junction)
+	static uint8 get_yield_lookahead() { return yield_lookahead; }
+	/// for benchmarks only; ignored in network games, where it is not synchronised
+	static void set_yield_lookahead(uint8 tiles);
+};
+
 
 /**
  * Runtime-only measurement for road merges (e.g. roundabout entrances).

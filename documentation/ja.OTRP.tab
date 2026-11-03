@@ -979,3 +979,8 @@ Thumbnails
 サムネイル表示
 Large thumbnails
 大きく表示
+#------ラウンドアバウトの合流制御------
+Yield at the junction ahead
+この先の交差点で譲る
+Wait while a vehicle on the other roads approaches the junction on the same lane or across our path
+ほかの道から同じ車線か進路を横切って交差点へ近づく車がいる間は待つ

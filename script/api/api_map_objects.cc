@@ -839,6 +839,11 @@ void export_map_objects(HSQUIRRELVM vm)
 	 * @returns true if the flag is set
 	 */
 	register_method(vm, &roadsign_t::get_two_ways, "get_two_ways");
+	/**
+	 * Get "yield at the junction ahead" flag of a one-way road sign.
+	 * @returns true if the flag is set
+	 */
+	register_method(vm, &roadsign_t::is_merge_yield, "is_merge_yield");
 	end_class(vm);
 
 	/**

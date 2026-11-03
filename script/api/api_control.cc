@@ -68,6 +68,12 @@ namespace script_api {
 	{
 		return merge_stats_t::get_lane_passes(pos, passing_lane);
 	}
+
+	void_t set_merge_yield_lookahead(uint8 tiles)
+	{
+		merge_control_t::set_yield_lookahead(tiles);
+		return void_t();
+	}
 };
 
 using namespace script_api;
@@ -171,6 +177,12 @@ void export_control(HSQUIRRELVM vm)
 	 * @returns number of vehicles (convoys count once) that entered the tile on this lane
 	 */
 	STATIC register_method(vm, &get_lane_passes, "get_lane_passes", false, true);
+	/**
+	 * Sets how many tiles of the other roads a vehicle at a yield sign looks at for approaching
+	 * traffic (1 to 3, default 1). Meant for comparing benchmarks; ignored in network games.
+	 * @param tiles number of tiles
+	 */
+	STATIC register_method(vm, &set_merge_yield_lookahead, "set_merge_yield_lookahead", false, true);
 
 	end_class(vm);
 }

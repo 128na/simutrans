@@ -220,6 +220,7 @@ onewaysign_info_t::onewaysign_info_t(roadsign_t* s, koord3d first_intersection) 
 	sign(s)
 {
 	has_intersection = (first_intersection != koord3d::invalid);
+	is_merge_entry = has_intersection  &&  sign->get_waytype()==road_wt  &&  koord_distance(sign->get_pos(), first_intersection)==1;
 	has_choose = sign->get_desc()->is_choose_sign();
 
 	// Detailed oneway only makes sense at 3/4-way junctions.
@@ -247,6 +248,15 @@ onewaysign_info_t::onewaysign_info_t(roadsign_t* s, koord3d first_intersection) 
 			add_component(&direction[1]);
 		}
 		end_table();
+	}
+
+	// Merge control at the junction ahead
+	if(  sign->get_desc()->is_single_way()  &&  is_merge_entry  ) {
+		bt_merge_yield.init(button_t::square_state, translator::translate("Yield at the junction ahead"));
+		bt_merge_yield.set_tooltip(translator::translate("Wait while a vehicle on the other roads approaches the junction on the same lane or across our path"));
+		bt_merge_yield.add_listener(this);
+		bt_merge_yield.pressed = sign->is_merge_yield();
+		add_component(&bt_merge_yield);
 	}
 
 	// Length-based choose (choose signs only)
@@ -389,6 +399,15 @@ bool onewaysign_info_t::action_triggered(gui_action_creator_t *komp, value_t ext
 		return true;
 	}
 
+	// Merge control
+	if(  komp == &bt_merge_yield  ) {
+		char param[256];
+		sprintf(param, "%s,%i,y", sign->get_pos().get_str(), (int)!sign->is_merge_yield());
+		tool_t::simple_tool[TOOL_CHANGE_ROADSIGN]->set_default_param(param);
+		welt->set_tool(tool_t::simple_tool[TOOL_CHANGE_ROADSIGN], welt->get_active_player());
+		return true;
+	}
+
 	// Detailed oneway toggle
 	if(  komp == &bt_detailed_oneway  ) {
 		char param[256];
@@ -474,6 +493,9 @@ void onewaysign_info_t::update_data()
 		for(  int i = 0;  i < 2;  i++  ) {
 			direction[i].pressed = (sign->get_lane_affinity() & (i + 1)) != 0;
 		}
+	}
+	if(  sign->get_desc()->is_single_way()  &&  is_merge_entry  ) {
+		bt_merge_yield.pressed = sign->is_merge_yield();
 	}
 	if(  has_choose  ) {
 		bt_length_based.pressed = sign->is_length_based();
