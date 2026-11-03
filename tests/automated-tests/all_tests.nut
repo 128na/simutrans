@@ -46,6 +46,7 @@ include("tests/test_wayobj")
 include("tests/test_schedule")
 include("tests/test_road_api")
 include("tests/test_road_choose")
+include("tests/test_roundabout")
 include("tests/test_priority_signal")
 include("tests/test_priority_signal_crossing")
 include("tests/test_otrp_signal_options")
@@ -303,6 +304,8 @@ all_tests <- [
 	test_schedule_current,
 	test_schedule_entry_time_statistics,
 	test_road_api,
+	test_roundabout_fixture_directions,
+	test_roundabout_fixture_circulates,
 	test_road_choose_stop_behind_halt_mode,
 	test_road_choose_stop_behind_oneway_mode,
 	test_road_choose_stop_behind_twoway_mode,
