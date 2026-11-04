@@ -862,6 +862,12 @@ void export_map_objects(HSQUIRRELVM vm)
 	 * @returns true if a junction follows the sign in its open direction
 	 */
 	register_method(vm, &roadsign_is_merge_entry, "is_merge_entry", true);
+	/**
+	 * Get the lane affinity bits of a one-way road sign, see command_x::set_lane_affinity.
+	 * Bit 4 is set while the sign has no junction ahead to apply to.
+	 * @returns the bits
+	 */
+	register_method(vm, &roadsign_t::get_lane_affinity, "get_lane_affinity");
 	end_class(vm);
 
 	/**

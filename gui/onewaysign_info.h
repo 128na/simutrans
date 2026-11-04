@@ -59,7 +59,7 @@ class onewaysign_info_t : public obj_infowin_t, public action_listener_t
 		roadsign_t* sign;
 
 		// lane-affinity buttons (road only, when intersection found)
-		button_t direction[2];
+		button_t direction[3]; ///< lane affinity: left turn, right turn, straight on (sign bits 1, 2, 8)
 
 		// length-based choose button
 		button_t bt_length_based;

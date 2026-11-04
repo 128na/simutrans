@@ -24,6 +24,9 @@
 #include "../simworld.h"
 
 // Labels: which edge the vehicle is entering FROM (ribi_t::nesw order: N, E, S, W).
+// lane affinity bits of the buttons: left turn, right turn, straight on (see convoi_t::calc_lane_affinity())
+static const uint8 lane_affinity_bits[3] = { 1, 2, 8 };
+
 static const char* const from_label[4] = { "from S", "from W", "from N", "from E" };
 // Exit direction column headers (same order).
 static const char* const exit_label[4] = { "N", "E", "S", "W" };
@@ -240,14 +243,17 @@ onewaysign_info_t::onewaysign_info_t(roadsign_t* s, koord3d first_intersection) 
 	if(  sign->get_desc()->is_single_way()  &&  has_intersection  ) {
 		direction[0].init(button_t::square_state, translator::translate("Left"));
 		direction[1].init(button_t::square_state, translator::translate("Right"));
-		direction[0].add_listener(this);
-		direction[1].add_listener(this);
-		direction[0].pressed = (sign->get_lane_affinity() & 1) != 0;
-		direction[1].pressed = (sign->get_lane_affinity() & 2) != 0;
-		add_table(2, 1);
+		direction[2].init(button_t::square_state, translator::translate("Straight: passing lane"));
+		direction[2].set_tooltip(translator::translate("Vehicles driving straight through the junctions ahead keep to the passing lane"));
+		for(  int i = 0;  i < 3;  i++  ) {
+			direction[i].add_listener(this);
+			direction[i].pressed = (sign->get_lane_affinity() & lane_affinity_bits[i]) != 0;
+		}
+		add_table(3, 1);
 		{
 			add_component(&direction[0]);
 			add_component(&direction[1]);
+			add_component(&direction[2]);
 		}
 		end_table();
 	}
@@ -486,9 +492,9 @@ bool onewaysign_info_t::action_triggered(gui_action_creator_t *komp, value_t ext
 	// Lane affinity buttons
 	if(  sign->get_desc()->is_single_way()  &&  has_intersection  ) {
 		uint8 fix = sign->get_lane_affinity();
-		for(  int i = 0;  i < 2;  i++  ) {
+		for(  int i = 0;  i < 3;  i++  ) {
 			if(  komp == &direction[i]  ) {
-				fix ^= (uint8)(i + 1);
+				fix ^= lane_affinity_bits[i];
 				char param[256];
 				sprintf(param, "%s,%i,r", sign->get_pos().get_str(), (int)fix);
 				tool_t::simple_tool[TOOL_CHANGE_ROADSIGN]->set_default_param(param);
@@ -505,8 +511,8 @@ bool onewaysign_info_t::action_triggered(gui_action_creator_t *komp, value_t ext
 void onewaysign_info_t::update_data()
 {
 	if(  sign->get_desc()->is_single_way()  &&  has_intersection  ) {
-		for(  int i = 0;  i < 2;  i++  ) {
-			direction[i].pressed = (sign->get_lane_affinity() & (i + 1)) != 0;
+		for(  int i = 0;  i < 3;  i++  ) {
+			direction[i].pressed = (sign->get_lane_affinity() & lane_affinity_bits[i]) != 0;
 		}
 	}
 	if(  sign->get_desc()->is_single_way()  &&  is_merge_entry  ) {

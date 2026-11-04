@@ -575,6 +575,13 @@ call_tool_init set_sign_merge_exit_clear(player_t* pl, koord3d pos, int val)
 	return call_tool_init(TOOL_CHANGE_ROADSIGN | SIMPLE_TOOL, (const char*)buf, 0, pl);
 }
 
+call_tool_init set_sign_lane_affinity(player_t* pl, koord3d pos, int val)
+{
+	cbuffer_t buf;
+	buf.printf("%hi,%hi,%hi,%hi,r", (sint16)pos.x, (sint16)pos.y, (sint16)pos.z, (sint16)val);
+	return call_tool_init(TOOL_CHANGE_ROADSIGN | SIMPLE_TOOL, (const char*)buf, 0, pl);
+}
+
 call_tool_work change_climate_at(player_t* pl, koord3d start, int climate)
 {
 	if (climate < water_climate || climate >= MAX_CLIMATES) {
@@ -861,6 +868,16 @@ void export_commands(HSQUIRRELVM vm)
 	 * @typemask bool(player_x, coord3d, int)
 	 */
 	STATIC register_method(vm, set_sign_merge_exit_clear, "set_merge_exit_clear", false, true);
+	/**
+	 * Sets the lane affinity of a one-way road sign in front of a junction on one-way roads with two lanes.
+	 * Bits: 1 vehicles turning left keep to the left lane, 2 vehicles turning right keep to the right lane,
+	 * 8 vehicles driving straight through the junctions ahead keep to the passing lane.
+	 * @param pl  player who owns the sign
+	 * @param pos position of the sign
+	 * @param val the bits
+	 * @typemask bool(player_x, coord3d, int)
+	 */
+	STATIC register_method(vm, set_sign_lane_affinity, "set_lane_affinity", false, true);
 	/**
 	 * Build way-object.
 	 * @param pl player to pay for the work

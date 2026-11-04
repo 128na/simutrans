@@ -6556,7 +6556,8 @@ void convoi_t::yield_lane_space()
 
 bool convoi_t::calc_lane_affinity(uint8 lane_affinity_sign)
 {
-	if(  lane_affinity_sign!=0  &&  lane_affinity_sign<4  ) {
+	// bits: 1 left turn -> left lane, 2 right turn -> right lane, 4 not applied, 8 straight on -> passing lane
+	if(  (lane_affinity_sign & 4) == 0  &&  (lane_affinity_sign & (1|2|8)) != 0  ) {
 		uint16 test_index = fahr[0]->get_route_index();
 		while(  test_index < route.get_count()  ) {
 			grund_t *gr = welt->lookup(route.at(test_index));
@@ -6600,6 +6601,25 @@ bool convoi_t::calc_lane_affinity(uint8 lane_affinity_sign)
 						lane_affinity = -1;
 					}
 					lane_affinity_end_index = test_index;
+					return true;
+				}
+				else if(  next_dir == prev_dir  &&  (lane_affinity_sign & 8) != 0  ) {
+					// straight on: keep to the passing lane through this and the following
+					// junctions we drive straight through, e.g. an exit and an entrance of a roundabout
+					lane_affinity = 1;
+					lane_affinity_end_index = test_index;
+					for(  uint16 i = test_index + 1;  i + 1 < route.get_count();  i++  ) {
+						const grund_t *gr_i = welt->lookup(route.at(i));
+						const strasse_t *str_i = gr_i ? (const strasse_t *)gr_i->get_weg(road_wt) : NULL;
+						if(  !str_i  ||  str_i->get_overtaking_mode() > oneway_mode  ) {
+							break;
+						}
+						const ribi_t::ribi r = str_i->get_ribi_unmasked();
+						if(  !(r == ribi_t::all  ||  ribi_t::is_threeway(r))  ||  ribi_type(route.at(i - 1), route.at(i)) != ribi_type(route.at(i), route.at(i + 1))  ) {
+							break;
+						}
+						lane_affinity_end_index = i;
+					}
 					return true;
 				}
 				else {
