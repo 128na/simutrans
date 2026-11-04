@@ -347,7 +347,8 @@ local EX = {
 }
 
 // stubs: build the row of junctions; without it (6,5) is the only junction
-function _ex_build(stubs = true)
+// stop: where to build the bus stop, by default behind the row of junctions (or one tile behind the single junction)
+function _ex_build(stubs = true, stop = null)
 {
 	local pl = player_x(0)
 	local road = _ra_road()
@@ -361,7 +362,7 @@ function _ex_build(stubs = true)
 	}
 	ASSERT_EQUAL(command_x.build_depot(pl, EX.side_depot, building_desc_x("CarDepot")), null)
 	ASSERT_EQUAL(command_x.build_depot(pl, EX.main_depot, building_desc_x("CarDepot")), null)
-	ASSERT_EQUAL(command_x.build_station(pl, stubs ? EX.block_stop : EX.long_block_stop, building_desc_x("BusStop")), null)
+	ASSERT_EQUAL(command_x.build_station(pl, stop ? stop : (stubs ? EX.block_stop : EX.long_block_stop), building_desc_x("BusStop")), null)
 	// one-way sign letting the side road only drive towards the junction
 	local sign = sign_desc_x.get_available_signs(wt_road).filter(@(i, d) d.is_one_way())[0]
 	local t = tile_x(EX.approach.x, EX.approach.y, EX.approach.z)
@@ -599,6 +600,66 @@ function test_roundabout_exit_clear_keeps_junction_free()
 	local r = _ex_run(true)
 	ASSERT_EQUAL(r.stuck_on_junction, 0)
 	ASSERT_GREATER(r.exit_waits, 0)
+}
+
+// A queue behind a loading convoy counts as well: a bus loads at (11,5), a second bus waits
+// behind it at (10,5), right behind the row of junctions.
+function test_roundabout_exit_clear_waits_for_queue_behind_loading_bus()
+{
+	local queue_stop = coord3d(11, 5, 0)
+	_ex_build(false, queue_stop)
+	local pl = player_x(0)
+	command_x.set_merge_exit_clear(pl, EX.approach, 1)
+	debug.set_game_speed(5)
+
+	local main_depot = depot_x(EX.main_depot.x, EX.main_depot.y, EX.main_depot.z)
+	local queued = []
+	for (local k = 0; k < 2; k++) {
+		main_depot.append_vehicle(pl, convoy_x(0), vehicle_desc_x("Bus"))
+		local list = main_depot.get_convoy_list()
+		local cnv = list[list.len() - 1]
+		cnv.change_schedule(pl, _ex_schedule(queue_stop, 100))
+		main_depot.start_convoy(pl, cnv)
+		queued.append(cnv)
+		for (local i = 0; i < 1500  &&  !(k == 0 ? cnv.is_loading() : (cnv.get_pos().x == 10  &&  cnv.get_speed() == 0)); i++) sleep()
+	}
+	ASSERT_TRUE(queued[0].is_loading())
+	ASSERT_EQUAL(queued[1].get_pos().x, 10)
+	ASSERT_FALSE(queued[1].is_loading())
+	// only now the row of junctions, as in _ln_run
+	for (local x = 7; x <= 9; x++) {
+		ASSERT_EQUAL(command_x.build_road(pl, coord3d(x, 5, 0), coord3d(x, 6, 0), _ra_road(), false, {overtaking_mode = prohibited_mode}), null)
+	}
+
+	local side_depot = depot_x(EX.side_depot.x, EX.side_depot.y, EX.side_depot.z)
+	side_depot.append_vehicle(pl, convoy_x(0), vehicle_desc_x("Bus"))
+	local bus = side_depot.get_convoy_list()[0]
+	bus.change_schedule(pl, _ex_schedule(EX.far_end, 0))
+	debug.reset_merge_stats()
+	debug.set_merge_stats_enabled(true)
+	side_depot.start_all_convoys(pl)
+	local stuck_on_junction = 0
+	for (local i = 0; i < 600; i++) {
+		sleep()
+		if (bus.is_waiting()  &&  _ex_on_junction(bus, EX.junctions)) {
+			stuck_on_junction++
+		}
+	}
+	local waits = debug.get_merge_stat("exit_waits")
+
+	// the loading bus leaves, and the queue with it
+	foreach (cnv in queued) {
+		cnv.change_schedule(pl, _ex_schedule(EX.far_end, 0))
+	}
+	local reached = false
+	for (local i = 0; i < 2000  &&  !reached; i++) {
+		sleep()
+		reached = bus.get_schedule().current != 0
+	}
+	debug.set_merge_stats_enabled(false)
+	ASSERT_EQUAL(stuck_on_junction, 0)
+	ASSERT_GREATER(waits, 0)
+	ASSERT_TRUE(reached)
 }
 
 // Long convoys. These need the test vehicle of tests/long-road-vehicle in the pak, so they are
