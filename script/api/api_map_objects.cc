@@ -34,6 +34,7 @@
 // for depot tools
 #include "../../simconvoi.h"
 #include "../../simmenu.h"
+#include "../../vehicle/merge_control.h"
 #include "../../descriptor/building_desc.h"
 #include "../../descriptor/vehicle_desc.h"
 
@@ -496,6 +497,13 @@ vector_tpl<grund_t*> const& get_tile_list( gebaeude_t *gb )
 	return list;
 }
 
+// merge rules apply to the junction right behind a one-way road sign
+static bool roadsign_is_merge_entry(roadsign_t *rs)
+{
+	return merge_control_t::get_junction_ahead(rs) != NULL;
+}
+
+
 void export_map_objects(HSQUIRRELVM vm)
 {
 	/**
@@ -839,6 +847,16 @@ void export_map_objects(HSQUIRRELVM vm)
 	 * @returns true if the flag is set
 	 */
 	register_method(vm, &roadsign_t::get_two_ways, "get_two_ways");
+	/**
+	 * Get "yield at the junction ahead" flag of a one-way road sign.
+	 * @returns true if the flag is set
+	 */
+	register_method(vm, &roadsign_t::is_merge_yield, "is_merge_yield");
+	/**
+	 * Can merge rules be set on this sign: is it a one-way road sign right in front of a junction?
+	 * @returns true if a junction follows the sign in its open direction
+	 */
+	register_method(vm, &roadsign_is_merge_entry, "is_merge_entry", true);
 	end_class(vm);
 
 	/**

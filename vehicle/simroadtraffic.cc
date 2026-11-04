@@ -233,6 +233,24 @@ uint8 private_car_t::idx_in_scope(uint8 org, sint8 offset) const {
 }
 
 
+koord3d private_car_t::get_route_after(koord3d pos) const
+{
+	// route[route_index] is pos_next, the decided tiles follow it in the ring buffer
+	const uint8 L = welt->get_settings().get_citycar_max_look_forward();
+	uint8 idx = route_index;
+	for(  uint8 i = 0;  i + 1 < L;  i++  ) {
+		if(  route[idx] == koord3d::invalid  ) {
+			break;
+		}
+		if(  route[idx] == pos  ) {
+			return route[idx_in_scope(idx, 1)];
+		}
+		idx = idx_in_scope(idx, 1);
+	}
+	return koord3d::invalid;
+}
+
+
 /**********************************************************************************************************************/
 /* statsauto_t (city cars) from here on */
 
@@ -626,7 +644,21 @@ bool private_car_t::ist_weg_frei(grund_t *gr)
 	if(  current_str->get_overtaking_mode()<=oneway_mode  &&  str->get_overtaking_mode()>oneway_mode  ) {
 		next_lane = -1;
 	}
-	
+
+	// merge control: a yield sign in front of the junction makes us wait for the traffic heading
+	// to it on the other roads. Decided before any tile is reserved.
+	if(  const grund_t *gr_here = welt->lookup(get_pos())  ) {
+		if(  merge_control_t::get_yield_sign(gr_here, gr)  ) {
+			const bool on_passing_lane = next_lane==1 ? true : next_lane==-1 ? false : is_overtaking();
+			if(  merge_control_t::must_yield(this, gr_here, gr, pos_next_next, on_passing_lane)  ) {
+				merge_stats_t::add(merge_stats_t::YIELD_WAITS);
+				ms_traffic_jam = 0;
+				current_speed = 48;
+				return false;
+			}
+		}
+	}
+
 	vehicle_base_t *obj = NULL;
 	bool turning = false;
 	

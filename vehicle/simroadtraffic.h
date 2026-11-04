@@ -191,6 +191,9 @@ public:
 	
 	bool get_next_cross_lane();
 	void set_next_cross_lane(bool);
+
+	/// the tile after @p pos on the part of the route already decided, koord3d::invalid if not known
+	koord3d get_route_after(koord3d pos) const;
 	
 	void unreserve_all_tiles();
 	

@@ -185,6 +185,134 @@ function test_roundabout_fixture_circulates()
 }
 
 
+// one-way sign on the branch tile in front of an inflow, keeping the travel direction
+function _ra_entry_sign(f)
+{
+	local pl = player_x(0)
+	local sign = sign_desc_x.get_available_signs(wt_road).filter(@(i, d) d.is_one_way())[0]
+	local t = tile_x(f.approach.x, f.approach.y, f.approach.z)
+	ASSERT_EQUAL(command_x.build_sign_at(pl, f.approach, sign), null)
+	if (t.get_way_dirs_masked(wt_road) != f.branch) {
+		// a new sign may first point the other way
+		ASSERT_EQUAL(command_x.build_sign_at(pl, f.approach, sign), null)
+	}
+	ASSERT_EQUAL(t.get_way_dirs_masked(wt_road), f.branch)
+	return t.find_object(mo_roadsign)
+}
+
+function _ra_north_inflow()
+{
+	foreach (f in _ra_inflows()) {
+		if (f.junction.x == 7  &&  f.junction.y == 6) return f
+	}
+	return null
+}
+
+function _ra_other_player()
+{
+	if (!player_x(2).is_valid()) {
+		ASSERT_TRUE(world.create_player(2, 1))
+	}
+	return player_x(2)
+}
+
+function test_roundabout_yield_flag()
+{
+	_ra_build()
+	local pl = player_x(0)
+	local f = _ra_north_inflow()
+	local sign = _ra_entry_sign(f)
+	ASSERT_FALSE(sign.is_merge_yield())
+	command_x.set_merge_yield(pl, f.approach, 1)
+	ASSERT_TRUE(sign.is_merge_yield())
+	command_x.set_merge_yield(pl, f.approach, 0)
+	ASSERT_FALSE(sign.is_merge_yield())
+	// another player may not change it
+	command_x.set_merge_yield(_ra_other_player(), f.approach, 1)
+	ASSERT_FALSE(sign.is_merge_yield())
+}
+
+// Ring traffic from the east loop to the west loop passes the north inflow, where a
+// bus from the north loop joins the ring.
+function _ra_yield_run(with_yield)
+{
+	_ra_build()
+	local pl = player_x(0)
+	local f = _ra_north_inflow()
+	_ra_entry_sign(f)
+	if (with_yield) {
+		command_x.set_merge_yield(pl, f.approach, 1)
+	}
+	debug.set_game_speed(5)
+	for (local k = 0; k < 6; k++) {
+		_ra_bench_bus([3, 1])
+		for (local i = 0; i < 25; i++) sleep()
+	}
+	for (local i = 0; i < 300; i++) sleep()
+
+	debug.reset_merge_stats()
+	debug.set_merge_stats_enabled(true)
+	local bus = _ra_bench_bus([1, 0])
+	local reached = 0
+	local last = bus.get_schedule().current
+	for (local i = 0; i < 3000  &&  reached < 4; i++) {
+		sleep()
+		local cur = bus.get_schedule().current
+		if (cur != last) {
+			reached++
+			last = cur
+		}
+	}
+	debug.set_merge_stats_enabled(false)
+	// the merging bus is not starved by the ring traffic
+	ASSERT_EQUAL(reached, 4)
+	return [debug.get_merge_stat("yield_checks"), debug.get_merge_stat("yield_waits")]
+}
+
+function test_roundabout_yield_waits_for_ring_traffic()
+{
+	local r = _ra_yield_run(true)
+	ASSERT_GREATER(r[0], 0)
+	ASSERT_GREATER(r[1], 0)
+}
+
+// the info window offers the merge rules on a one-way sign right in front of a junction, whatever
+// the overtaking mode of the roads (it once required one-way roads up to the junction)
+function test_roundabout_merge_entry_on_two_way_roads()
+{
+	local pl = player_x(0)
+	local road = _ra_road()
+	local mode = {overtaking_mode = twoway_mode}
+	ASSERT_EQUAL(command_x.build_road(pl, coord3d(3, 2, 0), coord3d(3, 8, 0), road, false, mode), null)
+	ASSERT_EQUAL(command_x.build_road(pl, coord3d(3, 6, 0), coord3d(6, 6, 0), road, false, mode), null)
+	local sign_desc = sign_desc_x.get_available_signs(wt_road).filter(@(i, d) d.is_one_way())[0]
+	local pos = coord3d(3, 5, 0)
+	local t = tile_x(pos.x, pos.y, pos.z)
+	ASSERT_EQUAL(command_x.build_sign_at(pl, pos, sign_desc), null)
+	if (t.get_way_dirs_masked(wt_road) != dir.south) {
+		ASSERT_EQUAL(command_x.build_sign_at(pl, pos, sign_desc), null)
+	}
+	// open towards the junction
+	ASSERT_EQUAL(t.get_way_dirs_masked(wt_road), dir.south)
+	ASSERT_TRUE(t.find_object(mo_roadsign).is_merge_entry())
+	// turned round, it leads away from the junction
+	ASSERT_EQUAL(command_x.build_sign_at(pl, pos, sign_desc), null)
+	ASSERT_EQUAL(t.get_way_dirs_masked(wt_road), dir.north)
+	ASSERT_FALSE(t.find_object(mo_roadsign).is_merge_entry())
+	// two tiles in front of the junction
+	local far = coord3d(3, 4, 0)
+	ASSERT_EQUAL(command_x.build_sign_at(pl, far, sign_desc), null)
+	ASSERT_FALSE(tile_x(far.x, far.y, far.z).find_object(mo_roadsign).is_merge_entry())
+}
+
+function test_roundabout_no_yield_without_flag()
+{
+	local r = _ra_yield_run(false)
+	ASSERT_EQUAL(r[0], 0)
+	ASSERT_EQUAL(r[1], 0)
+}
+
+
 //
 // Benchmarks. Not part of all_tests: run them one at a time with
 //   tests/run-automated-tests.sh bench_roundabout_uniform
@@ -327,7 +455,7 @@ function _ra_bench(name, pattern, citycars, setup = null, bus_count = 24)
 		if (pattern == "blocked"  &&  i == steps / 2) {
 			// lift the blockage
 			foreach (cnv in blockers) {
-				if (cnv.is_valid()) cnv.change_schedule(pl, schedule_x(wt_road, [schedule_entry_x(RA.loop_ends[0], 0, 0)]))
+				if (cnv.is_valid()) cnv.change_schedule(pl, schedule_x(wt_road, [schedule_entry_x(RA.loop_ends[0], 0, 0), schedule_entry_x(RA.loop_ends[1], 0, 0)]))
 			}
 			released = now
 		}
