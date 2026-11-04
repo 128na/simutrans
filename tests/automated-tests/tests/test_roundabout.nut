@@ -281,6 +281,35 @@ function test_roundabout_yield_waits_for_ring_traffic()
 	ASSERT_GREATER(r[1], 0)
 }
 
+// the info window offers the merge rules on a one-way sign right in front of a junction, whatever
+// the overtaking mode of the roads (it once required one-way roads up to the junction)
+function test_roundabout_merge_entry_on_two_way_roads()
+{
+	local pl = player_x(0)
+	local road = _ra_road()
+	local mode = {overtaking_mode = twoway_mode}
+	ASSERT_EQUAL(command_x.build_road(pl, coord3d(3, 2, 0), coord3d(3, 8, 0), road, false, mode), null)
+	ASSERT_EQUAL(command_x.build_road(pl, coord3d(3, 6, 0), coord3d(6, 6, 0), road, false, mode), null)
+	local sign_desc = sign_desc_x.get_available_signs(wt_road).filter(@(i, d) d.is_one_way())[0]
+	local pos = coord3d(3, 5, 0)
+	local t = tile_x(pos.x, pos.y, pos.z)
+	ASSERT_EQUAL(command_x.build_sign_at(pl, pos, sign_desc), null)
+	if (t.get_way_dirs_masked(wt_road) != dir.south) {
+		ASSERT_EQUAL(command_x.build_sign_at(pl, pos, sign_desc), null)
+	}
+	// open towards the junction
+	ASSERT_EQUAL(t.get_way_dirs_masked(wt_road), dir.south)
+	ASSERT_TRUE(t.find_object(mo_roadsign).is_merge_entry())
+	// turned round, it leads away from the junction
+	ASSERT_EQUAL(command_x.build_sign_at(pl, pos, sign_desc), null)
+	ASSERT_EQUAL(t.get_way_dirs_masked(wt_road), dir.north)
+	ASSERT_FALSE(t.find_object(mo_roadsign).is_merge_entry())
+	// two tiles in front of the junction
+	local far = coord3d(3, 4, 0)
+	ASSERT_EQUAL(command_x.build_sign_at(pl, far, sign_desc), null)
+	ASSERT_FALSE(tile_x(far.x, far.y, far.z).find_object(mo_roadsign).is_merge_entry())
+}
+
 function test_roundabout_no_yield_without_flag()
 {
 	local r = _ra_yield_run(false)
