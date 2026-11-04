@@ -324,25 +324,35 @@ static bool is_own_convoy(const convoi_t *cnv, const convoi_t *other)
 }
 
 
-/// is there a vehicle standing on @p gr that is not part of @p cnv and does not drive against @p dir?
-static bool has_stopped_vehicle(const grund_t *gr, const convoi_t *cnv, ribi_t::ribi dir)
+/**
+ * Is there a vehicle standing on @p gr that is not part of @p cnv and does not drive against @p dir?
+ * @param passing_lane whether we drive on the passing lane. On the traffic lane of a one-way road
+ *        we pass the vehicles standing on the passing lane. On the passing lane every stopped
+ *        vehicle counts: we have to merge back into the traffic lane in front of it.
+ */
+static bool has_stopped_vehicle(const grund_t *gr, const convoi_t *cnv, ribi_t::ribi dir, bool passing_lane)
 {
+	const strasse_t *str = (const strasse_t *)gr->get_weg(road_wt);
+	const bool two_lanes = str  &&  str->get_overtaking_mode() <= oneway_mode;
 	const uint8 top = gr->get_top();
 	for(  uint8 pos = 1;  pos < top;  pos++  ) {
 		vehicle_base_t *v = obj_cast<vehicle_base_t>(gr->obj_bei(pos));
 		if(  !v  ) {
 			continue;
 		}
+		bool on_passing_lane;
 		if(  road_vehicle_t *rv = obj_cast<road_vehicle_t>(v)  ) {
 			const convoi_t *ocnv = rv->get_convoi();
 			if(  !ocnv  ||  is_own_convoy(cnv, ocnv)  ||  ocnv->get_akt_speed() > kmh_to_speed(1)  ) {
 				continue;
 			}
+			on_passing_lane = ocnv->is_overtaking();
 		}
 		else if(  private_car_t *car = obj_cast<private_car_t>(v)  ) {
 			if(  car->get_current_speed() > kmh_to_speed(1)  ) {
 				continue;
 			}
+			on_passing_lane = car->is_overtaking();
 		}
 		else {
 			continue;
@@ -351,13 +361,17 @@ static bool has_stopped_vehicle(const grund_t *gr, const convoi_t *cnv, ribi_t::
 			// oncoming lane of a two-way road
 			continue;
 		}
+		if(  two_lanes  &&  !passing_lane  &&  on_passing_lane  ) {
+			// we drive past it on the traffic lane
+			continue;
+		}
 		return true;
 	}
 	return false;
 }
 
 
-bool merge_control_t::exit_blocked(const road_vehicle_t *self, const route_t *route, uint32 junction_index)
+bool merge_control_t::exit_blocked(const road_vehicle_t *self, const route_t *route, uint32 junction_index, bool passing_lane)
 {
 	merge_stats_t::add(merge_stats_t::EXIT_CHECKS);
 	merge_timer_t timer(merge_stats_t::EXIT_TIME_US);
@@ -375,7 +389,7 @@ bool merge_control_t::exit_blocked(const road_vehicle_t *self, const route_t *ro
 			// the way is gone: the usual checks will find a new route
 			return false;
 		}
-		if(  has_stopped_vehicle(gr, cnv, ribi_type(route->at((uint16)(i - 1)), route->at((uint16)i)))  ) {
+		if(  has_stopped_vehicle(gr, cnv, ribi_type(route->at((uint16)(i - 1)), route->at((uint16)i)), passing_lane)  ) {
 			return true;
 		}
 		if(  is_junction(gr)  ) {

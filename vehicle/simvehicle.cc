@@ -2982,14 +2982,14 @@ bool road_vehicle_t::can_enter_tile(const grund_t *gr, sint32 &restart_speed, ui
 		if(  const grund_t *gr_here = welt->lookup(get_pos())  ) {
 			if(  const roadsign_t *ms = merge_control_t::get_merge_sign(gr_here, gr)  ) {
 				merge_stats_t::counter_t wait = merge_stats_t::MAX_COUNTER;
+				const bool on_passing_lane = next_lane==1 ? true : next_lane==-1 ? false : cnv->is_overtaking();
 				if(  ms->is_merge_yield()  ) {
 					const koord3d to = route_index + 1u < r.get_count() ? r.at(route_index + 1u) : koord3d::invalid;
-					const bool on_passing_lane = next_lane==1 ? true : next_lane==-1 ? false : cnv->is_overtaking();
 					if(  merge_control_t::must_yield(this, gr_here, gr, to, on_passing_lane)  ) {
 						wait = merge_stats_t::YIELD_WAITS;
 					}
 				}
-				if(  wait == merge_stats_t::MAX_COUNTER  &&  ms->is_merge_exit_clear()  &&  merge_control_t::exit_blocked(this, &r, route_index)  ) {
+				if(  wait == merge_stats_t::MAX_COUNTER  &&  ms->is_merge_exit_clear()  &&  merge_control_t::exit_blocked(this, &r, route_index, on_passing_lane)  ) {
 					wait = merge_stats_t::EXIT_WAITS;
 				}
 				if(  wait != merge_stats_t::MAX_COUNTER  ) {
