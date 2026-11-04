@@ -9040,12 +9040,13 @@ char const* tool_setup_roundabout_t::do_work(player_t* player, const koord3d& st
 
 	// the ring: one-way in the driving direction
 	for(  uint32 i = 0;  i < n;  i++  ) {
-		const grund_t *gr = welt->lookup(ring[i]);
-		const strasse_t *str = gr ? (const strasse_t *)gr->get_weg(road_wt) : NULL;
+		grund_t *gr = welt->lookup(ring[i]);
+		strasse_t *str = gr ? (strasse_t *)gr->get_weg(road_wt) : NULL;
 		if(  !str  ) {
 			return NO_RING;
 		}
-		if(  !player_t::check_owner(str->get_owner(), player)  ) {
+		// as for placing a sign by hand: public roads are open to everybody
+		if(  str->is_deletable(player) != NULL  ) {
 			return NOT_OWNER;
 		}
 		const ribi_t::ribi to_next = ribi_type(ring[i], ring[(i + 1) % n]);
@@ -9077,7 +9078,7 @@ char const* tool_setup_roundabout_t::do_work(player_t* player, const koord3d& st
 			if(  !(str_to->get_ribi() & d_in)  ) {
 				continue; // an exit
 			}
-			if(  !player_t::check_owner(str_to->get_owner(), player)  ) {
+			if(  str_to->is_deletable(player) != NULL  ) {
 				return NOT_OWNER;
 			}
 			if(  str_to->get_ribi() & d  ) {

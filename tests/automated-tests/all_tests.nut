@@ -314,6 +314,7 @@ all_tests <- [
 	test_roundabout_exit_clear_keeps_junction_free,
 	test_roundabout_setup_tool_sets_entrances,
 	test_roundabout_setup_tool_checks_before_changing,
+	test_roundabout_setup_tool_on_public_roads,
 	test_roundabout_setup_tool_needs_one_way_ring,
 	test_road_choose_stop_behind_halt_mode,
 	test_road_choose_stop_behind_oneway_mode,
