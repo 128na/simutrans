@@ -70,6 +70,14 @@ function _ra_road()
 function _ra_build()
 {
 	local pl = player_x(0)
+	_ra_build_roads(pl)
+	// a depot is left in the direction opposite to the one it is entered in
+	ASSERT_EQUAL(command_x.build_road(pl, coord3d(8, 2, 0), RA.depot, _ra_road(), false, {overtaking_mode = twoway_mode}), null)
+	ASSERT_EQUAL(command_x.build_depot(pl, RA.depot, building_desc_x("CarDepot")), null)
+}
+
+function _ra_build_roads(pl)
+{
 	local road = _ra_road()
 	local oneway = {overtaking_mode = oneway_mode}
 	local segments = [
@@ -87,9 +95,6 @@ function _ra_build()
 	foreach (s in segments) {
 		ASSERT_EQUAL(command_x.build_road(pl, coord3d(s[0], s[1], 0), coord3d(s[2], s[3], 0), road, false, oneway), null)
 	}
-	// a depot is left in the direction opposite to the one it is entered in
-	ASSERT_EQUAL(command_x.build_road(pl, coord3d(8, 2, 0), RA.depot, road, false, {overtaking_mode = twoway_mode}), null)
-	ASSERT_EQUAL(command_x.build_depot(pl, RA.depot, building_desc_x("CarDepot")), null)
 }
 
 // inflow junctions with the branch tile in front of them
@@ -580,6 +585,128 @@ function test_roundabout_exit_clear_keeps_junction_free()
 
 
 //
+// Setup tool
+//
+
+function _ra_sign_count()
+{
+	local n = 0
+	foreach (b in _ra_branch_tiles()) {
+		if (tile_x(b[0], b[1], 0).find_object(mo_roadsign) != null) n++
+	}
+	return n
+}
+
+function _ra_visits_all_loops(cnv)
+{
+	local reached = 0
+	local last = cnv.get_schedule().current
+	for (local i = 0; i < 6000  &&  reached < RA.loop_ends.len(); i++) {
+		sleep()
+		local cur = cnv.get_schedule().current
+		if (cur != last) {
+			reached++
+			last = cur
+		}
+	}
+	return reached == RA.loop_ends.len()
+}
+
+function test_roundabout_setup_tool_sets_entrances()
+{
+	_ra_build()
+	local pl = player_x(0)
+	local tool = command_x(tool_setup_roundabout)
+	local cash = pl.get_cash()[0]
+	ASSERT_EQUAL(tool.work(pl, coord3d(6, 6, 0), coord3d(9, 9, 0), "yx"), null)
+	// a one-way sign in front of every entrance, none at the exits
+	ASSERT_EQUAL(_ra_sign_count(), 4)
+	foreach (f in _ra_inflows()) {
+		local t = tile_x(f.approach.x, f.approach.y, f.approach.z)
+		local sign = t.find_object(mo_roadsign)
+		ASSERT_TRUE(sign != null)
+		ASSERT_TRUE(sign.get_desc().is_one_way())
+		ASSERT_TRUE(sign.is_merge_yield())
+		ASSERT_TRUE(sign.is_merge_exit_clear())
+		// the sign keeps the road leading into the ring
+		ASSERT_EQUAL(t.get_way_dirs_masked(wt_road), f.branch)
+	}
+	ASSERT_LESS(pl.get_cash()[0], cash)
+
+	// once more with other rules, selected from the other corner: only the rules change
+	cash = pl.get_cash()[0]
+	ASSERT_EQUAL(tool.work(pl, coord3d(9, 9, 0), coord3d(6, 6, 0), "y"), null)
+	ASSERT_EQUAL(_ra_sign_count(), 4)
+	ASSERT_EQUAL(pl.get_cash()[0], cash)
+	foreach (f in _ra_inflows()) {
+		local sign = tile_x(f.approach.x, f.approach.y, f.approach.z).find_object(mo_roadsign)
+		ASSERT_TRUE(sign.is_merge_yield())
+		ASSERT_FALSE(sign.is_merge_exit_clear())
+	}
+
+	// the roundabout can still be driven through
+	debug.set_game_speed(5)
+	ASSERT_TRUE(_ra_visits_all_loops(_ra_start_bus()))
+}
+
+function test_roundabout_setup_tool_checks_before_changing()
+{
+	_ra_build()
+	local pl = player_x(0)
+	local tool = command_x(tool_setup_roundabout)
+	// not 4x4
+	ASSERT_TRUE(tool.work(pl, coord3d(6, 6, 0), coord3d(9, 8, 0), "y") != null)
+	// not the ring
+	ASSERT_TRUE(tool.work(pl, coord3d(5, 5, 0), coord3d(8, 8, 0), "y") != null)
+	// somebody else's roundabout
+	ASSERT_TRUE(tool.work(_ra_other_player(), coord3d(6, 6, 0), coord3d(9, 9, 0), "y") != null)
+	ASSERT_EQUAL(_ra_sign_count(), 0)
+
+	// a two-way road at a corner: a one-way sign would make it an entrance only
+	ASSERT_EQUAL(command_x.build_road(pl, coord3d(6, 6, 0), coord3d(6, 4, 0), _ra_road(), false, {overtaking_mode = twoway_mode}), null)
+	ASSERT_TRUE(tool.work(pl, coord3d(6, 6, 0), coord3d(9, 9, 0), "y") != null)
+	ASSERT_EQUAL(_ra_sign_count(), 0)
+	ASSERT_EQUAL(tile_x(6, 5, 0).find_object(mo_roadsign), null)
+	ASSERT_EQUAL(command_x(tool_remove_way).work(pl, coord3d(6, 5, 0), coord3d(6, 4, 0), "" + wt_road), null)
+
+	// one entrance cannot take a one-way sign: the other entrances are left alone as well
+	local other = sign_desc_x.get_available_signs(wt_road).filter(@(i, d) !d.is_one_way()  &&  !d.is_traffic_light()  &&  !d.is_private_way())[0]
+	local west = coord3d(5, 8, 0)
+	ASSERT_EQUAL(command_x.build_sign_at(pl, west, other), null)
+	ASSERT_TRUE(tool.work(pl, coord3d(6, 6, 0), coord3d(9, 9, 0), "y") != null)
+	ASSERT_EQUAL(_ra_sign_count(), 1)
+	ASSERT_FALSE(tile_x(west.x, west.y, west.z).find_object(mo_roadsign).get_desc().is_one_way())
+}
+
+// a roundabout of public roads (as in towns) can be set up by any player, as signs can be placed there by hand
+function test_roundabout_setup_tool_on_public_roads()
+{
+	_ra_build_roads(player_x(1))
+	local pl = player_x(0)
+	ASSERT_EQUAL(command_x(tool_setup_roundabout).work(pl, coord3d(6, 6, 0), coord3d(9, 9, 0), "y"), null)
+	ASSERT_EQUAL(_ra_sign_count(), 4)
+	foreach (f in _ra_inflows()) {
+		local sign = tile_x(f.approach.x, f.approach.y, f.approach.z).find_object(mo_roadsign)
+		ASSERT_TRUE(sign.is_merge_yield())
+		ASSERT_EQUAL(sign.get_owner().nr, 0)
+	}
+}
+
+// a ring that can be driven both ways is no roundabout
+function test_roundabout_setup_tool_needs_one_way_ring()
+{
+	local pl = player_x(0)
+	local road = _ra_road()
+	local twoway = {overtaking_mode = twoway_mode}
+	foreach (s in [[9,6, 6,6], [6,6, 6,9], [6,9, 9,9], [9,9, 9,6], [7,6, 7,3]]) {
+		ASSERT_EQUAL(command_x.build_road(pl, coord3d(s[0], s[1], 0), coord3d(s[2], s[3], 0), road, false, twoway), null)
+	}
+	ASSERT_TRUE(command_x(tool_setup_roundabout).work(pl, coord3d(6, 6, 0), coord3d(9, 9, 0), "y") != null)
+	ASSERT_EQUAL(tile_x(7, 5, 0).find_object(mo_roadsign), null)
+}
+
+
+//
 // Benchmarks. Not part of all_tests: run them one at a time with
 //   tests/run-automated-tests.sh bench_roundabout_uniform
 // and read the "BENCH" lines of script-scenario.log.
@@ -750,7 +877,36 @@ function _ra_bench(name, pattern, citycars, setup = null, bus_count = 24)
 	ASSERT_GREATER(last_total, 0)
 }
 
+// merge rules on all four entrances, set with the roundabout tool ("y" yield, "x" exit clear)
+function _ra_rules(param, lookahead = 1)
+{
+	return function() {
+		debug.set_merge_yield_lookahead(lookahead)
+		ASSERT_EQUAL(command_x(tool_setup_roundabout).work(player_x(0), coord3d(6, 6, 0), coord3d(9, 9, 0), param), null)
+	}
+}
+
 function bench_roundabout_uniform()        { _ra_bench("uniform", "uniform", 0) }
 function bench_roundabout_ring()           { _ra_bench("ring", "ring", 0) }
 function bench_roundabout_blocked()        { _ra_bench("blocked", "blocked", 0) }
 function bench_roundabout_mixed()          { _ra_bench("mixed", "uniform", 16) }
+
+function bench_roundabout_uniform_yield()  { _ra_bench("uniform_yield", "uniform", 0, _ra_rules("y")) }
+function bench_roundabout_ring_yield()     { _ra_bench("ring_yield", "ring", 0, _ra_rules("y")) }
+function bench_roundabout_blocked_yield()  { _ra_bench("blocked_yield", "blocked", 0, _ra_rules("y")) }
+function bench_roundabout_mixed_yield()    { _ra_bench("mixed_yield", "uniform", 16, _ra_rules("y")) }
+
+function bench_roundabout_uniform_yieldtwo() { _ra_bench("uniform_yieldtwo", "uniform", 0, _ra_rules("y", 2)) }
+function bench_roundabout_ring_yieldtwo()    { _ra_bench("ring_yieldtwo", "ring", 0, _ra_rules("y", 2)) }
+function bench_roundabout_blocked_yieldtwo() { _ra_bench("blocked_yieldtwo", "blocked", 0, _ra_rules("y", 2)) }
+function bench_roundabout_mixed_yieldtwo()   { _ra_bench("mixed_yieldtwo", "uniform", 16, _ra_rules("y", 2)) }
+
+function bench_roundabout_uniform_exit()   { _ra_bench("uniform_exit", "uniform", 0, _ra_rules("x")) }
+function bench_roundabout_ring_exit()      { _ra_bench("ring_exit", "ring", 0, _ra_rules("x")) }
+function bench_roundabout_blocked_exit()   { _ra_bench("blocked_exit", "blocked", 0, _ra_rules("x")) }
+function bench_roundabout_mixed_exit()     { _ra_bench("mixed_exit", "uniform", 16, _ra_rules("x")) }
+
+function bench_roundabout_uniform_both()   { _ra_bench("uniform_both", "uniform", 0, _ra_rules("yx")) }
+function bench_roundabout_ring_both()      { _ra_bench("ring_both", "ring", 0, _ra_rules("yx")) }
+function bench_roundabout_blocked_both()   { _ra_bench("blocked_both", "blocked", 0, _ra_rules("yx")) }
+function bench_roundabout_mixed_both()     { _ra_bench("mixed_both", "uniform", 16, _ra_rules("yx")) }

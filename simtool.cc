@@ -8992,6 +8992,185 @@ image_id tool_remove_house_t::get_marker_image() const
 	return cursor;
 }
 
+
+// edge of the 4x4 area in the order vehicles drive around it
+static void roundabout_ring(koord3d start, koord3d end, bool drive_left, vector_tpl<koord3d> &ring)
+{
+	const sint16 x0 = min(start.x, end.x), x1 = max(start.x, end.x);
+	const sint16 y0 = min(start.y, end.y), y1 = max(start.y, end.y);
+	const sint8 z = start.z;
+	ring.clear();
+	// counter-clockwise on the map: the north edge is driven westwards
+	for(  sint16 x = x1;  x > x0;  x--  ) { ring.append(koord3d(x, y0, z)); }
+	for(  sint16 y = y0;  y < y1;  y++  ) { ring.append(koord3d(x0, y, z)); }
+	for(  sint16 x = x0;  x < x1;  x++  ) { ring.append(koord3d(x, y1, z)); }
+	for(  sint16 y = y1;  y > y0;  y--  ) { ring.append(koord3d(x1, y, z)); }
+	if(  drive_left  ) {
+		for(  uint32 i = 0;  i < ring.get_count() / 2;  i++  ) {
+			const koord3d k = ring[i];
+			ring[i] = ring[ring.get_count() - 1 - i];
+			ring[ring.get_count() - 1 - i] = k;
+		}
+	}
+}
+
+
+char const* tool_setup_roundabout_t::do_work(player_t* player, const koord3d& start, const koord3d& end)
+{
+	static char const* const NOT_4X4 = "Select the 4x4 area whose edge is the roundabout";
+	static char const* const NO_RING = "The edge of the area is not a road driven around in the driving direction only";
+	static char const* const NO_ENTRANCE = "No road leads into the roundabout";
+	static char const* const BAD_ENTRANCE = "A one-way sign cannot be set up in front of an entrance";
+	static char const* const NO_SIGN = "No one-way road sign available";
+	static char const* const TWO_WAY = "A road at the roundabout can be driven both into and out of it";
+	static char const* const NOT_OWNER = "Das Feld gehoert\neinem anderen Spieler\n";
+
+	if(  end == koord3d::invalid  ||  start.z != end.z  ||  abs(start.x - end.x) != 3  ||  abs(start.y - end.y) != 3  ) {
+		return NOT_4X4;
+	}
+	const char *param = default_param ? default_param : "";
+	const bool yield = strchr(param, 'y') != NULL;
+	const bool exit_clear = strchr(param, 'x') != NULL;
+
+	vector_tpl<koord3d> ring;
+	roundabout_ring(start, end, welt->get_settings().is_drive_left(), ring);
+	const uint32 n = ring.get_count();
+	const sint16 x0 = min(start.x, end.x), x1 = max(start.x, end.x);
+	const sint16 y0 = min(start.y, end.y), y1 = max(start.y, end.y);
+
+	// the ring: one-way in the driving direction
+	for(  uint32 i = 0;  i < n;  i++  ) {
+		grund_t *gr = welt->lookup(ring[i]);
+		strasse_t *str = gr ? (strasse_t *)gr->get_weg(road_wt) : NULL;
+		if(  !str  ) {
+			return NO_RING;
+		}
+		// as for placing a sign by hand: public roads are open to everybody
+		if(  str->is_deletable(player) != NULL  ) {
+			return NOT_OWNER;
+		}
+		const ribi_t::ribi to_next = ribi_type(ring[i], ring[(i + 1) % n]);
+		const ribi_t::ribi to_prev = ribi_type(ring[i], ring[(i + n - 1) % n]);
+		if(  !(str->get_ribi() & to_next)  ||  (str->get_ribi() & to_prev)  ) {
+			return NO_RING;
+		}
+	}
+
+	// the entrances: roads outside the area that can be driven into the ring
+	struct entrance_t { grund_t *gr; ribi_t::ribi dir; roadsign_t *sign; };
+	vector_tpl<entrance_t> entrances;
+	uint32 signs_to_build = 0;
+	for(  uint32 i = 0;  i < n;  i++  ) {
+		grund_t *gr = welt->lookup(ring[i]);
+		const strasse_t *str = (const strasse_t *)gr->get_weg(road_wt);
+		for(  uint8 r = 0;  r < 4;  r++  ) {
+			const ribi_t::ribi d = ribi_t::nesw[r];
+			const koord k = ring[i].get_2d() + koord(d);
+			if(  k.x >= x0  &&  k.x <= x1  &&  k.y >= y0  &&  k.y <= y1  ) {
+				continue; // part of the area
+			}
+			grund_t *to;
+			if(  !(str->get_ribi_unmasked() & d)  ||  !gr->get_neighbour(to, road_wt, d)  ) {
+				continue;
+			}
+			strasse_t *str_to = (strasse_t *)to->get_weg(road_wt);
+			const ribi_t::ribi d_in = ribi_t::backward(d);
+			if(  !(str_to->get_ribi() & d_in)  ) {
+				continue; // an exit
+			}
+			if(  str_to->is_deletable(player) != NULL  ) {
+				return NOT_OWNER;
+			}
+			if(  str_to->get_ribi() & d  ) {
+				// a one-way sign would close this way out of the roundabout
+				return TWO_WAY;
+			}
+			if(  ribi_t::is_single(str_to->get_ribi_unmasked())  ||  to->get_crossing()  ) {
+				return BAD_ENTRANCE;
+			}
+			roadsign_t *rs = to->find<roadsign_t>();
+			if(  rs  ) {
+				if(  !rs->get_desc()->is_single_way()  ||  rs->get_desc()->get_wtyp() != road_wt  ) {
+					return BAD_ENTRANCE;
+				}
+				if(  !player_t::check_owner(rs->get_owner(), player)  ) {
+					return NOT_OWNER;
+				}
+			}
+			else {
+				signs_to_build++;
+			}
+			entrance_t e = { to, d_in, rs };
+			entrances.append(e);
+		}
+	}
+	if(  entrances.empty()  ) {
+		return NO_ENTRANCE;
+	}
+
+	// the cheapest plain one-way sign (by name on a tie, so that all clients choose the same one)
+	const roadsign_desc_t *desc = NULL;
+	if(  signs_to_build  ) {
+		FOR(vector_tpl<const roadsign_desc_t*>, const d, roadsign_t::get_available_signs(road_wt)) {
+			if(  d->get_flags() == roadsign_desc_t::ONE_WAY  &&  (!desc  ||  d->get_price() < desc->get_price()  ||  (d->get_price() == desc->get_price()  &&  strcmp(d->get_name(), desc->get_name()) < 0))  ) {
+				desc = d;
+			}
+		}
+		if(  !desc  ) {
+			return NO_SIGN;
+		}
+		if(  !player->can_afford(-(sint64)desc->get_price() * signs_to_build)  ) {
+			return NOTICE_INSUFFICIENT_FUNDS;
+		}
+	}
+
+	FOR(vector_tpl<entrance_t>, &e, entrances) {
+		if(  !e.sign  ) {
+			weg_t *weg = e.gr->get_weg(road_wt);
+			// the direction of a one-way sign is the one it closes
+			e.sign = new roadsign_t(player, e.gr->get_pos(), ribi_t::backward(e.dir), desc);
+			e.gr->obj_add(e.sign);
+			e.sign->finish_rd( OTRP_VERSION_MAJOR );
+			weg->count_sign();
+			player_t::book_construction_costs(player, -desc->get_price(), e.gr->get_pos().get_2d(), road_wt);
+		}
+		e.sign->set_merge_yield(yield);
+		e.sign->set_merge_exit_clear(exit_clear);
+		if(  onewaysign_info_t* win = (onewaysign_info_t*)win_get_magic((ptrdiff_t)e.sign)  ) {
+			win->update_data();
+		}
+	}
+	return NULL;
+}
+
+
+void tool_setup_roundabout_t::mark_tiles(player_t*, koord3d const& start, koord3d const& end)
+{
+	if(  start.z != end.z  ) {
+		return;
+	}
+	vector_tpl<koord3d> ring;
+	roundabout_ring(start, end, welt->get_settings().is_drive_left(), ring);
+	FOR(vector_tpl<koord3d>, const& k, ring) {
+		if(  grund_t *gr = welt->lookup(k)  ) {
+			// the ground marker, as for removing city buildings
+			zeiger_t *marker = new zeiger_t(gr->get_pos(), NULL);
+			const uint8 grund_hang = gr->get_grund_hang();
+			const uint8 weg_hang   = gr->get_weg_hang();
+			const uint8 hang = max(corner_sw(grund_hang), corner_sw(weg_hang))
+			                 + 3  * max(corner_se(grund_hang), corner_se(weg_hang))
+			                 + 9  * max(corner_ne(grund_hang), corner_ne(weg_hang))
+			                 + 27 * max(corner_nw(grund_hang), corner_nw(weg_hang));
+			const uint8 back_hang = (hang % 3) + 3 * ((uint8)(hang / 9)) + 27;
+			marker->set_foreground_image(ground_desc_t::marker->get_image(grund_hang % 27));
+			marker->set_image(ground_desc_t::marker->get_image(back_hang));
+			marker->mark_image_dirty(marker->get_image(), 0);
+			gr->obj_add(marker);
+			marked.insert(marker);
+		}
+	}
+}
+
 // only public player can copy public objects
 const char* tool_pipette_t::allow_tool_check(const obj_t* obj, const obj_desc_timelined_t *desc, const player_t* pl) const
 {

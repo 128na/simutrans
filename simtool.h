@@ -858,6 +858,28 @@ private:
 	bool remove_house(player_t*, koord3d const&);
 };
 
+/**
+ * Sets up the entrances of a roundabout in one go. The edge of the selected 4x4 area has to be a
+ * road that can only be driven around in the driving direction (counter-clockwise when driving on
+ * the right). Every road leading into it gets a one-way sign on the tile in front of the ring,
+ * unless it has one already, and the merge rules of these signs are set.
+ * default_param: 'y' sets "yield", 'x' sets "enter only when the convoy fits behind the junction";
+ * a rule not given is cleared.
+ * Everything is checked before anything is changed.
+ */
+class tool_setup_roundabout_t : public two_click_tool_t {
+public:
+	tool_setup_roundabout_t() : two_click_tool_t(TOOL_SETUP_ROUNDABOUT | GENERAL_TOOL) {}
+	char const* get_tooltip(player_t const*) const OVERRIDE { return translator::translate("Set up the entrances of a roundabout"); }
+	waytype_t get_waytype() const OVERRIDE { return road_wt; }
+	bool is_init_network_safe() const OVERRIDE { return true; }
+private:
+	char const* do_work(player_t*, koord3d const&, koord3d const&) OVERRIDE;
+	void mark_tiles(player_t*, koord3d const&, koord3d const&) OVERRIDE;
+	uint8 is_valid_pos(player_t*, koord3d const&, char const*&, koord3d const&) OVERRIDE { return 2; }
+	image_id get_marker_image() const OVERRIDE { return cursor; }
+};
+
 // internal tool: show error message at specific coordinate
 // used for scenario error messages send by server
 class tool_error_message_t : public tool_t {
