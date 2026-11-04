@@ -70,6 +70,14 @@ function _ra_road()
 function _ra_build()
 {
 	local pl = player_x(0)
+	_ra_build_roads(pl)
+	// a depot is left in the direction opposite to the one it is entered in
+	ASSERT_EQUAL(command_x.build_road(pl, coord3d(8, 2, 0), RA.depot, _ra_road(), false, {overtaking_mode = twoway_mode}), null)
+	ASSERT_EQUAL(command_x.build_depot(pl, RA.depot, building_desc_x("CarDepot")), null)
+}
+
+function _ra_build_roads(pl)
+{
 	local road = _ra_road()
 	local oneway = {overtaking_mode = oneway_mode}
 	local segments = [
@@ -87,9 +95,6 @@ function _ra_build()
 	foreach (s in segments) {
 		ASSERT_EQUAL(command_x.build_road(pl, coord3d(s[0], s[1], 0), coord3d(s[2], s[3], 0), road, false, oneway), null)
 	}
-	// a depot is left in the direction opposite to the one it is entered in
-	ASSERT_EQUAL(command_x.build_road(pl, coord3d(8, 2, 0), RA.depot, road, false, {overtaking_mode = twoway_mode}), null)
-	ASSERT_EQUAL(command_x.build_depot(pl, RA.depot, building_desc_x("CarDepot")), null)
 }
 
 // inflow junctions with the branch tile in front of them
@@ -558,6 +563,20 @@ function test_roundabout_setup_tool_checks_before_changing()
 	ASSERT_TRUE(tool.work(pl, coord3d(6, 6, 0), coord3d(9, 9, 0), "y") != null)
 	ASSERT_EQUAL(_ra_sign_count(), 1)
 	ASSERT_FALSE(tile_x(west.x, west.y, west.z).find_object(mo_roadsign).get_desc().is_one_way())
+}
+
+// a roundabout of public roads (as in towns) can be set up by any player, as signs can be placed there by hand
+function test_roundabout_setup_tool_on_public_roads()
+{
+	_ra_build_roads(player_x(1))
+	local pl = player_x(0)
+	ASSERT_EQUAL(command_x(tool_setup_roundabout).work(pl, coord3d(6, 6, 0), coord3d(9, 9, 0), "y"), null)
+	ASSERT_EQUAL(_ra_sign_count(), 4)
+	foreach (f in _ra_inflows()) {
+		local sign = tile_x(f.approach.x, f.approach.y, f.approach.z).find_object(mo_roadsign)
+		ASSERT_TRUE(sign.is_merge_yield())
+		ASSERT_EQUAL(sign.get_owner().nr, 0)
+	}
 }
 
 // a ring that can be driven both ways is no roundabout
