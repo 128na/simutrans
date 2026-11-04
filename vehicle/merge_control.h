@@ -40,6 +40,13 @@ public:
 	static const roadsign_t *get_merge_sign(const grund_t *from, const grund_t *junction);
 
 	/**
+	 * @returns the junction right behind one-way road sign @p rs in its open direction, or NULL.
+	 * Merge rules set on the sign apply to the vehicles entering this junction. Unlike
+	 * roadsign_t::get_intersection(), the overtaking mode of the roads does not matter.
+	 */
+	static const grund_t *get_junction_ahead(const roadsign_t *rs);
+
+	/**
 	 * Decides whether @p self, standing on @p from, has to wait before entering @p junction.
 	 * @param to tile @p self heads for after the junction, koord3d::invalid if not known yet
 	 * @param passing_lane the lane @p self is going to use on the junction

@@ -11,6 +11,7 @@
 #include "../macros.h"
 #include "components/gui_label.h"
 #include "../obj/roadsign.h"
+#include "../vehicle/merge_control.h"
 #include "../player/simplay.h"
 #include "../dataobj/ribi.h"
 #include "../dataobj/translator.h"
@@ -220,7 +221,8 @@ onewaysign_info_t::onewaysign_info_t(roadsign_t* s, koord3d first_intersection) 
 	sign(s)
 {
 	has_intersection = (first_intersection != koord3d::invalid);
-	is_merge_entry = has_intersection  &&  sign->get_waytype()==road_wt  &&  koord_distance(sign->get_pos(), first_intersection)==1;
+	// as the vehicles decide it: the road modes do not matter, unlike for first_intersection
+	is_merge_entry = merge_control_t::get_junction_ahead(sign) != NULL;
 	has_choose = sign->get_desc()->is_choose_sign();
 
 	// Detailed oneway only makes sense at 3/4-way junctions.
