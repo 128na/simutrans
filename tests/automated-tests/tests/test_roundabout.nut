@@ -421,6 +421,126 @@ function _ex_run(exit_clear, long = false)
 	return { stuck_on_junction = stuck_on_junction, exit_waits = waits }
 }
 
+// Lanes: the same row of junctions, but the main road is one-way with two lanes (halt_mode, so a
+// bus can stop on the passing lane). Bus B stops at the stop on the passing lane, beside bus A,
+// which then moves on to a second stop further down. A bus coming along the side road on the
+// traffic lane can pass B, so B must not keep it waiting.
+local LN = {
+	stop = coord3d(10, 5, 0)
+	pass_to = coord3d(11, 5, 0)
+	far_stop = coord3d(12, 5, 0)
+}
+
+function _ln_build()
+{
+	local pl = player_x(0)
+	local road = _ra_road()
+	local mode = {overtaking_mode = prohibited_mode}
+	ASSERT_EQUAL(command_x.build_road(pl, EX.side_depot, EX.junctions[0], road, false, mode), null)
+	ASSERT_EQUAL(command_x.build_road(pl, EX.main_depot, EX.far_end, road, false, {overtaking_mode = halt_mode}), null)
+	ASSERT_EQUAL(command_x.build_depot(pl, EX.side_depot, building_desc_x("CarDepot")), null)
+	ASSERT_EQUAL(command_x.build_depot(pl, EX.main_depot, building_desc_x("CarDepot")), null)
+	ASSERT_EQUAL(command_x.build_station(pl, LN.stop, building_desc_x("BusStop")), null)
+	ASSERT_EQUAL(command_x.build_station(pl, LN.far_stop, building_desc_x("BusStop")), null)
+	local sign = sign_desc_x.get_available_signs(wt_road).filter(@(i, d) d.is_one_way())[0]
+	local t = tile_x(EX.approach.x, EX.approach.y, EX.approach.z)
+	ASSERT_EQUAL(command_x.build_sign_at(pl, EX.approach, sign), null)
+	if (t.get_way_dirs_masked(wt_road) != dir.south) {
+		ASSERT_EQUAL(command_x.build_sign_at(pl, EX.approach, sign), null)
+	}
+	ASSERT_EQUAL(t.get_way_dirs_masked(wt_road), dir.south)
+}
+
+function _ln_main_bus(depot, stop)
+{
+	local pl = player_x(0)
+	depot.append_vehicle(pl, convoy_x(0), vehicle_desc_x("Bus"))
+	local list = depot.get_convoy_list()
+	local cnv = list[list.len() - 1]
+	cnv.change_schedule(pl, schedule_x(wt_road, [schedule_entry_x(stop, 100, 0), schedule_entry_x(LN.far_stop, 100, 0)]))
+	depot.start_all_convoys(pl)
+	for (local i = 0; i < 1500  &&  !cnv.is_loading(); i++) sleep()
+	ASSERT_TRUE(cnv.is_loading())
+	return cnv
+}
+
+// Returns the exit waits of the side bus and whether it got past bus B while B was still loading.
+// same_lane: instead only bus A stands at the stop, on the traffic lane the side bus takes.
+function _ln_run(exit_clear, same_lane = false)
+{
+	_ln_build()
+	local pl = player_x(0)
+	if (exit_clear) {
+		command_x.set_merge_exit_clear(pl, EX.approach, 1)
+	}
+	debug.set_game_speed(5)
+	debug.watch_lane_passes(LN.stop)
+	debug.watch_lane_passes(LN.pass_to)
+	debug.reset_merge_stats()
+	debug.set_merge_stats_enabled(true)
+
+	local main_depot = depot_x(EX.main_depot.x, EX.main_depot.y, EX.main_depot.z)
+	local a = _ln_main_bus(main_depot, LN.stop)
+	local b = a
+	if (same_lane) {
+		ASSERT_EQUAL(debug.get_lane_passes(LN.stop, false), 1)
+	}
+	else {
+		b = _ln_main_bus(main_depot, LN.stop)
+		// B stands beside A, on the passing lane
+		ASSERT_EQUAL(debug.get_lane_passes(LN.stop, true), 1)
+		// A moves on to the far stop and stays there
+		a.change_schedule(pl, schedule_x(wt_road, [schedule_entry_x(LN.far_stop, 100, 0), schedule_entry_x(LN.stop, 100, 0)]))
+		for (local i = 0; i < 1500  &&  !(a.is_loading()  &&  a.get_pos().x == LN.far_stop.x); i++) sleep()
+		ASSERT_EQUAL(a.get_pos().x, LN.far_stop.x)
+	}
+	ASSERT_TRUE(b.is_loading())
+	// only now the row of junctions: B would not have driven into it with A standing behind it
+	for (local x = 7; x <= 9; x++) {
+		ASSERT_EQUAL(command_x.build_road(pl, coord3d(x, 5, 0), coord3d(x, 6, 0), _ra_road(), false, {overtaking_mode = prohibited_mode}), null)
+	}
+
+	local side_depot = depot_x(EX.side_depot.x, EX.side_depot.y, EX.side_depot.z)
+	side_depot.append_vehicle(pl, convoy_x(0), vehicle_desc_x("Bus"))
+	local bus = side_depot.get_convoy_list()[0]
+	bus.change_schedule(pl, schedule_x(wt_road, [schedule_entry_x(LN.pass_to, 0, 0), schedule_entry_x(LN.far_stop, 0, 0)]))
+	debug.reset_merge_stats()
+	side_depot.start_all_convoys(pl)
+	local passed = false
+	for (local i = 0; i < 1500  &&  !passed; i++) {
+		sleep()
+		passed = debug.get_lane_passes(LN.pass_to, false) > 0
+	}
+	local res = { exit_waits = debug.get_merge_stat("exit_waits"), passed = passed, b_loading = b.is_loading() }
+	debug.set_merge_stats_enabled(false)
+	return res
+}
+
+// without the setting the side bus drives past B on the traffic lane
+function test_roundabout_exit_lanes_pass_by_default()
+{
+	local r = _ln_run(false)
+	ASSERT_TRUE(r.passed)
+	ASSERT_TRUE(r.b_loading)
+}
+
+// with it, B on the other lane does not keep the side bus waiting
+function test_roundabout_exit_clear_ignores_other_lane()
+{
+	local r = _ln_run(true)
+	ASSERT_EQUAL(r.exit_waits, 0)
+	ASSERT_TRUE(r.passed)
+	ASSERT_TRUE(r.b_loading)
+}
+
+// a bus stopped on the traffic lane still keeps it waiting
+function test_roundabout_exit_clear_waits_on_same_lane()
+{
+	local r = _ln_run(true, true)
+	ASSERT_GREATER(r.exit_waits, 0)
+	ASSERT_FALSE(r.passed)
+}
+
 function test_roundabout_exit_flag()
 {
 	_ex_build()
