@@ -50,8 +50,10 @@ public:
 	 * Decides whether convoy @p self has to wait before entering the junction at route index
 	 * @p junction_index, because a stopped vehicle behind the junction would make it stop
 	 * before all of it has left the junction(s).
+	 * @param passing_lane our lane on the junction: entering on the traffic lane, we pass the
+	 *        vehicles stopped on the passing lane of a one-way road
 	 */
-	static bool exit_blocked(const road_vehicle_t *self, const route_t *route, uint32 junction_index);
+	static bool exit_blocked(const road_vehicle_t *self, const route_t *route, uint32 junction_index, bool passing_lane);
 
 	/// how many tiles of the other roads are looked at for approaching vehicles (1 = the tiles next to the junction)
 	static uint8 get_yield_lookahead() { return yield_lookahead; }
