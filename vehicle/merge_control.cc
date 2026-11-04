@@ -64,6 +64,28 @@ const roadsign_t *merge_control_t::get_yield_sign(const grund_t *from, const gru
 }
 
 
+const grund_t *merge_control_t::get_junction_ahead(const roadsign_t *rs)
+{
+	if(  !rs  ||  rs->get_governed_waytype() != road_wt  ||  !rs->get_desc()->is_single_way()  ) {
+		return NULL;
+	}
+	const grund_t *gr = welt->lookup(rs->get_pos());
+	const weg_t *w = gr ? gr->get_weg(road_wt) : NULL;
+	if(  !w  ) {
+		return NULL;
+	}
+	// the direction of a one-way sign is the one it closes
+	const ribi_t::ribi open = w->get_ribi_unmasked() & ~rs->get_dir();
+	for(  uint8 r = 0;  r < 4;  r++  ) {
+		grund_t *to;
+		if(  (open & ribi_t::nesw[r])  &&  gr->get_neighbour(to, road_wt, ribi_t::nesw[r])  &&  is_junction(to)  ) {
+			return to;
+		}
+	}
+	return NULL;
+}
+
+
 /**
  * Where does vehicle @p v go after @p junction?
  * @returns the direction, or ribi_t::none if the vehicle does not know it (yet)

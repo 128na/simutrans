@@ -309,6 +309,7 @@ all_tests <- [
 	test_roundabout_yield_flag,
 	test_roundabout_yield_waits_for_ring_traffic,
 	test_roundabout_no_yield_without_flag,
+	test_roundabout_merge_entry_on_two_way_roads,
 	test_road_choose_stop_behind_halt_mode,
 	test_road_choose_stop_behind_oneway_mode,
 	test_road_choose_stop_behind_twoway_mode,
