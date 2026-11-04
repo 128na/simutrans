@@ -313,6 +313,7 @@ all_tests <- [
 	test_roundabout_exit_flag,
 	test_roundabout_exit_stuck_on_junction_by_default,
 	test_roundabout_exit_clear_keeps_junction_free,
+	test_roundabout_exit_clear_waits_for_queue_behind_loading_bus,
 	test_roundabout_exit_lanes_pass_by_default,
 	test_roundabout_exit_clear_ignores_other_lane,
 	test_roundabout_exit_clear_waits_on_same_lane,

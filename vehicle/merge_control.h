@@ -26,7 +26,7 @@ class vehicle_base_t;
  * - yield: wait while a vehicle heading to the junction on another road would have to
  *   share a lane with us or cross our path there.
  * - exit clear: a convoy enters only when there is room for all of it behind the junction,
- *   so that it does not stop with its tail on the junction.
+ *   so that it does not stop with its tail on the junction because of a convoy loading there.
  *
  * All checks are free of side effects, so they can be used in the recursive
  * "can the convoy ahead move" checks as well.
@@ -55,8 +55,9 @@ public:
 
 	/**
 	 * Decides whether convoy @p self has to wait before entering the junction at route index
-	 * @p junction_index, because a stopped vehicle behind the junction would make it stop
-	 * before all of it has left the junction(s).
+	 * @p junction_index, because a convoy loading behind the junction (or a queue waiting behind
+	 * it) would make it stop before all of it has left the junction(s). Plain traffic jams do not
+	 * count: they move on by themselves, and waiting for them can lock up a busy roundabout.
 	 * @param passing_lane our lane on the junction: entering on the traffic lane, we pass the
 	 *        vehicles stopped on the passing lane of a one-way road
 	 */

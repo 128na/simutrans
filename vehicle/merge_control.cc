@@ -29,6 +29,9 @@ uint8 merge_control_t::yield_lookahead = 1;
 // how many tiles beyond the length of the convoy the exit check looks for a place to stop
 #define MAX_EXIT_EXTRA_TILES 8
 
+// how far the exit check follows a queue of stopped vehicles to find out what it waits for
+#define MAX_EXIT_QUEUE_TILES 16
+
 
 void merge_control_t::set_yield_lookahead(uint8 tiles)
 {
@@ -346,16 +349,24 @@ static bool is_own_convoy(const convoi_t *cnv, const convoi_t *other)
 }
 
 
+/// what stands on a tile in our way
+enum stopped_t {
+	STOPPED_NONE,   ///< nothing: the tile is free, or the vehicles there are moving
+	STOPPED_QUEUE,  ///< vehicles that wait for whatever is in front of them, e.g. in a traffic jam
+	STOPPED_LOADING ///< a convoy loading at a stop, which may stand there for a long time
+};
+
 /**
- * Is there a vehicle standing on @p gr that is not part of @p cnv and does not drive against @p dir?
+ * What stands on @p gr in our way, ignoring @p cnv itself and the vehicles driving against @p dir?
  * @param passing_lane whether we drive on the passing lane. On the traffic lane of a one-way road
  *        we pass the vehicles standing on the passing lane. On the passing lane every stopped
  *        vehicle counts: we have to merge back into the traffic lane in front of it.
  */
-static bool has_stopped_vehicle(const grund_t *gr, const convoi_t *cnv, ribi_t::ribi dir, bool passing_lane)
+static stopped_t get_stopped(const grund_t *gr, const convoi_t *cnv, ribi_t::ribi dir, bool passing_lane)
 {
 	const strasse_t *str = (const strasse_t *)gr->get_weg(road_wt);
 	const bool two_lanes = str  &&  str->get_overtaking_mode() <= oneway_mode;
+	stopped_t res = STOPPED_NONE;
 	const uint8 top = gr->get_top();
 	for(  uint8 pos = 1;  pos < top;  pos++  ) {
 		vehicle_base_t *v = obj_cast<vehicle_base_t>(gr->obj_bei(pos));
@@ -363,12 +374,14 @@ static bool has_stopped_vehicle(const grund_t *gr, const convoi_t *cnv, ribi_t::
 			continue;
 		}
 		bool on_passing_lane;
+		bool loading = false;
 		if(  road_vehicle_t *rv = obj_cast<road_vehicle_t>(v)  ) {
 			const convoi_t *ocnv = rv->get_convoi();
 			if(  !ocnv  ||  is_own_convoy(cnv, ocnv)  ||  ocnv->get_akt_speed() > kmh_to_speed(1)  ) {
 				continue;
 			}
 			on_passing_lane = ocnv->is_overtaking();
+			loading = ocnv->is_loading();
 		}
 		else if(  private_car_t *car = obj_cast<private_car_t>(v)  ) {
 			if(  car->get_current_speed() > kmh_to_speed(1)  ) {
@@ -387,9 +400,12 @@ static bool has_stopped_vehicle(const grund_t *gr, const convoi_t *cnv, ribi_t::
 			// we drive past it on the traffic lane
 			continue;
 		}
-		return true;
+		if(  loading  ) {
+			return STOPPED_LOADING;
+		}
+		res = STOPPED_QUEUE;
 	}
-	return false;
+	return res;
 }
 
 
@@ -403,6 +419,10 @@ bool merge_control_t::exit_blocked(const road_vehicle_t *self, const route_t *ro
 	const uint32 needed = (cnv->get_entire_convoy_length() + CARUNITS_PER_TILE - 1) / CARUNITS_PER_TILE;
 	// Look for `needed` tiles in a row that are not junctions: the convoy may stop there without
 	// blocking anybody. Any stopped vehicle up to there would make us stop earlier.
+	// Only a convoy loading at a stop, or a queue waiting behind one, keeps us waiting: it may stand
+	// there for a long time. A plain traffic jam moves on by itself. Waiting for it would not save
+	// much, but could lock up the whole roundabout: the vehicles we wait for may be waiting for
+	// the exits, which are full of vehicles queuing up behind us.
 	uint32 free_run = 0;
 	const uint32 last = junction_index + needed + MAX_EXIT_EXTRA_TILES;
 	for(  uint32 i = junction_index + 1;  i < route->get_count()  &&  i <= last;  i++  ) {
@@ -411,8 +431,34 @@ bool merge_control_t::exit_blocked(const road_vehicle_t *self, const route_t *ro
 			// the way is gone: the usual checks will find a new route
 			return false;
 		}
-		if(  has_stopped_vehicle(gr, cnv, ribi_type(route->at((uint16)(i - 1)), route->at((uint16)i)), passing_lane)  ) {
+		const stopped_t stopped = get_stopped(gr, cnv, ribi_type(route->at((uint16)(i - 1)), route->at((uint16)i)), passing_lane);
+		if(  stopped == STOPPED_LOADING  ) {
 			return true;
+		}
+		if(  stopped == STOPPED_QUEUE  ) {
+			// follow the queue along our route (also beyond `last`) to the vehicle at its head
+			uint32 q = i + 1;
+			for(  ;  q < route->get_count()  &&  q <= i + MAX_EXIT_QUEUE_TILES;  q++  ) {
+				const grund_t *qgr = welt->lookup(route->at((uint16)q));
+				if(  !qgr  ) {
+					return false;
+				}
+				const stopped_t s = get_stopped(qgr, cnv, ribi_type(route->at((uint16)(q - 1)), route->at((uint16)q)), passing_lane);
+				if(  s == STOPPED_LOADING  ) {
+					return true;
+				}
+				if(  s == STOPPED_NONE  ) {
+					break;
+				}
+			}
+			if(  q > last  ) {
+				// the queue covers the rest of the tiles we look at
+				return false;
+			}
+			// carry on behind the queue; its tiles are no place to stop
+			free_run = 0;
+			i = q - 1;
+			continue;
 		}
 		if(  is_junction(gr)  ) {
 			free_run = 0;
