@@ -1,0 +1,24 @@
+# Road vehicle for tests only: one tile long and without coupling constraints,
+# so that convoys of two or more tiles can be put together from it.
+obj=vehicle
+name=TestLongBus
+waytype=road
+engine_type=diesel
+intro_year=1900
+speed=60
+power=200
+gear=100
+weight=10
+length=16
+cost=1000
+runningcost=1
+payload=10
+freight=Passagiere
+EmptyImage[S]=test_long_bus.0.0
+EmptyImage[N]=test_long_bus.0.0
+EmptyImage[E]=test_long_bus.0.0
+EmptyImage[W]=test_long_bus.0.0
+EmptyImage[SE]=test_long_bus.0.0
+EmptyImage[NW]=test_long_bus.0.0
+EmptyImage[NE]=test_long_bus.0.0
+EmptyImage[SW]=test_long_bus.0.0

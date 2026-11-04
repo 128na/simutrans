@@ -340,23 +340,28 @@ local EX = {
 	junctions = [coord3d(6, 5, 0), coord3d(7, 5, 0), coord3d(8, 5, 0), coord3d(9, 5, 0)]
 	main_depot = coord3d(0, 5, 0)
 	block_stop = coord3d(10, 5, 0)
+	// without the row of junctions: one free tile between the junction and the waiting bus
+	long_block_stop = coord3d(8, 5, 0)
 	far_end = coord3d(13, 5, 0)
 	before_far_end = coord3d(12, 5, 0)
 }
 
-function _ex_build()
+// stubs: build the row of junctions; without it (6,5) is the only junction
+function _ex_build(stubs = true)
 {
 	local pl = player_x(0)
 	local road = _ra_road()
 	local mode = {overtaking_mode = prohibited_mode}
 	ASSERT_EQUAL(command_x.build_road(pl, EX.main_depot, EX.far_end, road, false, mode), null)
 	ASSERT_EQUAL(command_x.build_road(pl, EX.side_depot, EX.junctions[0], road, false, mode), null)
-	for (local x = 7; x <= 9; x++) {
-		ASSERT_EQUAL(command_x.build_road(pl, coord3d(x, 5, 0), coord3d(x, 6, 0), road, false, mode), null)
+	if (stubs) {
+		for (local x = 7; x <= 9; x++) {
+			ASSERT_EQUAL(command_x.build_road(pl, coord3d(x, 5, 0), coord3d(x, 6, 0), road, false, mode), null)
+		}
 	}
 	ASSERT_EQUAL(command_x.build_depot(pl, EX.side_depot, building_desc_x("CarDepot")), null)
 	ASSERT_EQUAL(command_x.build_depot(pl, EX.main_depot, building_desc_x("CarDepot")), null)
-	ASSERT_EQUAL(command_x.build_station(pl, EX.block_stop, building_desc_x("BusStop")), null)
+	ASSERT_EQUAL(command_x.build_station(pl, stubs ? EX.block_stop : EX.long_block_stop, building_desc_x("BusStop")), null)
 	// one-way sign letting the side road only drive towards the junction
 	local sign = sign_desc_x.get_available_signs(wt_road).filter(@(i, d) d.is_one_way())[0]
 	local t = tile_x(EX.approach.x, EX.approach.y, EX.approach.z)
@@ -367,9 +372,9 @@ function _ex_build()
 	ASSERT_EQUAL(t.get_way_dirs_masked(wt_road), dir.south)
 }
 
-function _ex_on_junction(cnv)
+function _ex_on_junction(cnv, junctions)
 {
-	foreach (j in EX.junctions) {
+	foreach (j in junctions) {
 		foreach (c in tile_x(j.x, j.y, j.z).get_convoys()) {
 			if (c.id == cnv.id) return true
 		}
@@ -385,9 +390,13 @@ function _ex_schedule(stop, min_load)
 // A bus waits for a full load behind the junctions, then a bus comes along the side road.
 // Returns how often the second bus was seen waiting on a junction, and checks that it gets
 // through once the first bus leaves.
-function _ex_run(exit_clear)
+// long: instead a two tile long convoy (needs the test vehicle of tests/long-road-vehicle)
+// turns in at a single junction, with one free tile between it and the waiting bus.
+function _ex_run(exit_clear, long = false)
 {
-	_ex_build()
+	_ex_build(!long)
+	local block_stop = long ? EX.long_block_stop : EX.block_stop
+	local junctions = long ? [EX.junctions[0]] : EX.junctions
 	local pl = player_x(0)
 	if (exit_clear) {
 		command_x.set_merge_exit_clear(pl, EX.approach, 1)
@@ -397,14 +406,23 @@ function _ex_run(exit_clear)
 	local main_depot = depot_x(EX.main_depot.x, EX.main_depot.y, EX.main_depot.z)
 	main_depot.append_vehicle(pl, convoy_x(0), vehicle_desc_x("Bus"))
 	local blocker = main_depot.get_convoy_list()[0]
-	blocker.change_schedule(pl, _ex_schedule(EX.block_stop, 100))
+	blocker.change_schedule(pl, _ex_schedule(block_stop, 100))
 	main_depot.start_all_convoys(pl)
 	for (local i = 0; i < 1000  &&  !blocker.is_loading(); i++) sleep()
 	ASSERT_TRUE(blocker.is_loading())
 
 	local side_depot = depot_x(EX.side_depot.x, EX.side_depot.y, EX.side_depot.z)
-	side_depot.append_vehicle(pl, convoy_x(0), vehicle_desc_x("Bus"))
+	if (long) {
+		local desc = vehicle_desc_x("TestLongBus")
+		ASSERT_TRUE(desc.is_valid())
+		side_depot.append_vehicle(pl, convoy_x(0), desc)
+		side_depot.append_vehicle(pl, side_depot.get_convoy_list()[0], desc)
+	}
+	else {
+		side_depot.append_vehicle(pl, convoy_x(0), vehicle_desc_x("Bus"))
+	}
 	local bus = side_depot.get_convoy_list()[0]
+	ASSERT_EQUAL(bus.get_tile_length(false), long ? 2 : 1)
 	bus.change_schedule(pl, _ex_schedule(EX.far_end, 0))
 
 	debug.reset_merge_stats()
@@ -414,7 +432,7 @@ function _ex_run(exit_clear)
 	local stuck_on_junction = 0
 	for (local i = 0; i < 600; i++) {
 		sleep()
-		if (bus.is_waiting()  &&  _ex_on_junction(bus)) {
+		if (bus.is_waiting()  &&  _ex_on_junction(bus, junctions)) {
 			stuck_on_junction++
 		}
 	}
@@ -579,6 +597,24 @@ function test_roundabout_exit_stuck_on_junction_by_default()
 function test_roundabout_exit_clear_keeps_junction_free()
 {
 	local r = _ex_run(true)
+	ASSERT_EQUAL(r.stuck_on_junction, 0)
+	ASSERT_GREATER(r.exit_waits, 0)
+}
+
+// Long convoys. These need the test vehicle of tests/long-road-vehicle in the pak, so they are
+// not part of all_tests; see documentation/roundabout_merge_control.md.
+
+// without the setting, the convoy waits with its tail on the junction
+function addon_roundabout_long_tail_on_junction_by_default()
+{
+	local r = _ex_run(false, true)
+	ASSERT_GREATER(r.stuck_on_junction, 0)
+	ASSERT_EQUAL(r.exit_waits, 0)
+}
+
+function addon_roundabout_long_exit_clear_keeps_junction_free()
+{
+	local r = _ex_run(true, true)
 	ASSERT_EQUAL(r.stuck_on_junction, 0)
 	ASSERT_GREATER(r.exit_waits, 0)
 }

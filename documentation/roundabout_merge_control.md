@@ -45,8 +45,24 @@ issue #5「OTRPの2車線ラウンドアバウト向けに合流優先と進入�
 交差点の上で止まってしまう。テスト（`test_roundabout_exit_*`）では、交差点が4つ続く道路の先でバスが満載待ちをしている所へ、
 脇道から別のバスを入らせて再現している。設定がないとバスは交差点上で止まり、設定があると標識の手前で待つ。
 
-長い編成で後ろが交差点に残るケースは、2マス以上の道路編成をテスト用の pak64 で用意できていないため、まだ確かめていない
-（試した連結はどれも車庫から出発できなかった）。
+### 長い編成
+
+テスト用の pak64 の道路車両は連結の制約が厳しく、2マス以上の編成を作れない（試した連結はどれも車庫から出発できなかった）。
+そこで、制約のない1マス長の試験用車両 `TestLongBus` を `tests/long-road-vehicle/` に置き、2両つないだ2マスの編成で確かめた。
+
+- 交差点が1つだけの道路で、交差点の先に1マス空けてバスが満載待ちをしている所へ、脇道から2マスの編成を入らせる。
+- 設定がないと、既存の判定は交差点の次の1マスが空いているので進入し、編成の後ろを交差点に残したまま待つ（`addon_roundabout_long_tail_on_junction_by_default`）。
+- 設定があると標識の手前で待ち、交差点に残らない（`addon_roundabout_long_exit_clear_keeps_junction_free`）。編成の長さを1マスとして扱うように壊すと、この確認は落ちる。
+
+試験用車両は CI のテスト環境に入っていないので、この2つは `all_tests` に入れていない。手元では次のように走らせる。
+
+```
+makeobj pak64 <テスト環境>/pak/vehicle.TestLongBus.pak tests/long-road-vehicle/test_long_bus.dat
+tests/run-automated-tests.sh addon_roundabout_long_tail_on_junction_by_default
+tests/run-automated-tests.sh addon_roundabout_long_exit_clear_keeps_junction_free
+```
+
+試験用車両はほかのテストの車両選びを変えるおそれがあるので、ふだんのテスト環境とは別のコピーに入れる。
 
 ## 一括設定ツール
 
