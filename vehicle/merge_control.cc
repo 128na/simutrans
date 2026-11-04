@@ -79,10 +79,19 @@ static ribi_t::ribi exit_direction(vehicle_base_t *v, koord3d junction)
 		if(  !r  ||  r->empty()  ) {
 			return ribi_t::none;
 		}
-		// the junction lies shortly ahead of the front of the convoy, or below it for a trailing car
+		// the junction lies shortly ahead of the front of the convoy, or below it for a trailing car.
+		// Search from the far end back, so a route looping a roundabout gives the coming visit and
+		// not the one of the previous lap.
 		const uint32 front = cnv->front()->get_route_index();
 		const uint32 first = front > 16 ? front - 16 : 0;
-		for(  uint32 i = first;  i + 1 < r->get_count()  &&  i <= front + MAX_YIELD_LOOKAHEAD + 1;  i++  ) {
+		if(  r->get_count() < 2  ) {
+			return ribi_t::none;
+		}
+		uint32 end = front + MAX_YIELD_LOOKAHEAD + 2;
+		if(  end > r->get_count() - 1u  ) {
+			end = r->get_count() - 1u;
+		}
+		for(  uint32 i = end;  i-- > first;  ) {
 			if(  r->at((uint16)i) == junction  ) {
 				return ribi_type(junction, r->at((uint16)(i + 1)));
 			}
