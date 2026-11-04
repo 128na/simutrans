@@ -13,6 +13,8 @@
 
 class grund_t;
 class roadsign_t;
+class road_vehicle_t;
+class route_t;
 class vehicle_base_t;
 
 
@@ -23,6 +25,8 @@ class vehicle_base_t;
  * so they apply to the vehicles entering the junction from that tile only:
  * - yield: wait while a vehicle heading to the junction on another road would have to
  *   share a lane with us or cross our path there.
+ * - exit clear: a convoy enters only when there is room for all of it behind the junction,
+ *   so that it does not stop with its tail on the junction.
  *
  * All checks are free of side effects, so they can be used in the recursive
  * "can the convoy ahead move" checks as well.
@@ -32,8 +36,8 @@ class merge_control_t
 	static uint8 yield_lookahead;
 
 public:
-	/// @returns the sign with the yield rule for vehicles entering @p junction from @p from, or NULL
-	static const roadsign_t *get_yield_sign(const grund_t *from, const grund_t *junction);
+	/// @returns the sign with merge rules for vehicles entering @p junction from @p from, or NULL
+	static const roadsign_t *get_merge_sign(const grund_t *from, const grund_t *junction);
 
 	/**
 	 * @returns the junction right behind one-way road sign @p rs in its open direction, or NULL.
@@ -48,6 +52,15 @@ public:
 	 * @param passing_lane the lane @p self is going to use on the junction
 	 */
 	static bool must_yield(const vehicle_base_t *self, const grund_t *from, const grund_t *junction, koord3d to, bool passing_lane);
+
+	/**
+	 * Decides whether convoy @p self has to wait before entering the junction at route index
+	 * @p junction_index, because a stopped vehicle behind the junction would make it stop
+	 * before all of it has left the junction(s).
+	 * @param passing_lane our lane on the junction: entering on the traffic lane, we pass the
+	 *        vehicles stopped on the passing lane of a one-way road
+	 */
+	static bool exit_blocked(const road_vehicle_t *self, const route_t *route, uint32 junction_index, bool passing_lane);
 
 	/// how many tiles of the other roads are looked at for approaching vehicles (1 = the tiles next to the junction)
 	static uint8 get_yield_lookahead() { return yield_lookahead; }

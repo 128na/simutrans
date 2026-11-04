@@ -853,6 +853,11 @@ void export_map_objects(HSQUIRRELVM vm)
 	 */
 	register_method(vm, &roadsign_t::is_merge_yield, "is_merge_yield");
 	/**
+	 * Get "enter only when the convoy fits behind the junction" flag of a one-way road sign.
+	 * @returns true if the flag is set
+	 */
+	register_method(vm, &roadsign_t::is_merge_exit_clear, "is_merge_exit_clear");
+	/**
 	 * Can merge rules be set on this sign: is it a one-way road sign right in front of a junction?
 	 * @returns true if a junction follows the sign in its open direction
 	 */

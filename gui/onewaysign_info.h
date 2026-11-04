@@ -70,6 +70,7 @@ class onewaysign_info_t : public obj_infowin_t, public action_listener_t
 
 		// merge control at the junction right behind the sign (road only)
 		button_t bt_merge_yield;
+	button_t bt_merge_exit_clear;
 
 		// detailed_oneway toggle
 		button_t bt_detailed_oneway;

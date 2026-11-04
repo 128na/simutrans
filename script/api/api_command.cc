@@ -568,6 +568,13 @@ call_tool_init set_sign_merge_yield(player_t* pl, koord3d pos, int val)
 	return call_tool_init(TOOL_CHANGE_ROADSIGN | SIMPLE_TOOL, (const char*)buf, 0, pl);
 }
 
+call_tool_init set_sign_merge_exit_clear(player_t* pl, koord3d pos, int val)
+{
+	cbuffer_t buf;
+	buf.printf("%hi,%hi,%hi,%hi,x", (sint16)pos.x, (sint16)pos.y, (sint16)pos.z, (sint16)val);
+	return call_tool_init(TOOL_CHANGE_ROADSIGN | SIMPLE_TOOL, (const char*)buf, 0, pl);
+}
+
 call_tool_work change_climate_at(player_t* pl, koord3d start, int climate)
 {
 	if (climate < water_climate || climate >= MAX_CLIMATES) {
@@ -844,6 +851,16 @@ void export_commands(HSQUIRRELVM vm)
 	 * @typemask bool(player_x, coord3d, int)
 	 */
 	STATIC register_method(vm, set_sign_merge_yield, "set_merge_yield", false, true);
+	/**
+	 * Sets "enter only when the convoy fits behind the junction" on a one-way road sign in front
+	 * of a junction: convoys entering the junction from the sign wait while a stopped vehicle
+	 * behind the junction would make them stop with their tail on it.
+	 * @param pl  player who owns the sign
+	 * @param pos position of the sign
+	 * @param val 1 to enable, 0 to disable
+	 * @typemask bool(player_x, coord3d, int)
+	 */
+	STATIC register_method(vm, set_sign_merge_exit_clear, "set_merge_exit_clear", false, true);
 	/**
 	 * Build way-object.
 	 * @param pl player to pay for the work

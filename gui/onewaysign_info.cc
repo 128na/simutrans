@@ -259,6 +259,12 @@ onewaysign_info_t::onewaysign_info_t(roadsign_t* s, koord3d first_intersection) 
 		bt_merge_yield.add_listener(this);
 		bt_merge_yield.pressed = sign->is_merge_yield();
 		add_component(&bt_merge_yield);
+
+		bt_merge_exit_clear.init(button_t::square_state, translator::translate("Enter only when the convoy fits behind the junction"));
+		bt_merge_exit_clear.set_tooltip(translator::translate("Wait while a stopped vehicle behind the junction would leave the tail of the convoy on it"));
+		bt_merge_exit_clear.add_listener(this);
+		bt_merge_exit_clear.pressed = sign->is_merge_exit_clear();
+		add_component(&bt_merge_exit_clear);
 	}
 
 	// Length-based choose (choose signs only)
@@ -409,6 +415,13 @@ bool onewaysign_info_t::action_triggered(gui_action_creator_t *komp, value_t ext
 		welt->set_tool(tool_t::simple_tool[TOOL_CHANGE_ROADSIGN], welt->get_active_player());
 		return true;
 	}
+	if(  komp == &bt_merge_exit_clear  ) {
+		char param[256];
+		sprintf(param, "%s,%i,x", sign->get_pos().get_str(), (int)!sign->is_merge_exit_clear());
+		tool_t::simple_tool[TOOL_CHANGE_ROADSIGN]->set_default_param(param);
+		welt->set_tool(tool_t::simple_tool[TOOL_CHANGE_ROADSIGN], welt->get_active_player());
+		return true;
+	}
 
 	// Detailed oneway toggle
 	if(  komp == &bt_detailed_oneway  ) {
@@ -498,6 +511,7 @@ void onewaysign_info_t::update_data()
 	}
 	if(  sign->get_desc()->is_single_way()  &&  is_merge_entry  ) {
 		bt_merge_yield.pressed = sign->is_merge_yield();
+		bt_merge_exit_clear.pressed = sign->is_merge_exit_clear();
 	}
 	if(  has_choose  ) {
 		bt_length_based.pressed = sign->is_length_based();
