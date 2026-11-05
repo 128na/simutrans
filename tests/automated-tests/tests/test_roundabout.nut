@@ -1007,3 +1007,245 @@ function bench_roundabout_uniform_both()   { _ra_bench("uniform_both", "uniform"
 function bench_roundabout_ring_both()      { _ra_bench("ring_both", "ring", 0, _ra_rules("yx")) }
 function bench_roundabout_blocked_both()   { _ra_bench("blocked_both", "blocked", 0, _ra_rules("yx")) }
 function bench_roundabout_mixed_both()     { _ra_bench("mixed_both", "uniform", 16, _ra_rules("yx")) }
+
+//
+// Measurement benchmarks used for the comparison of the merge rules (issue #5): every bench runs once
+// and prints one "R" line to script-scenario.log. Not part of all_tests. Names:
+//   bx_<pattern>_<rules>  the patterns of _ra_bench at 24 buses
+//   bs_<rules>_<n>        uniform pattern with n buses (bs_*_48b: a copy, to run two at a time)
+//   bl*_*                 lane affinity signs on the ring corners (bits 2|8, or ::lane_bits)
+// rules: "" none, "y" yield, "y2" yield looking 2 tiles ahead, "x" exit clear, "yx" both, "l" lane signs
+//
+// copy of _ra_bench that also reports the buses out of the depot at t0 and the stall at the end
+function _rb(name, pattern, citycars, rules, bus_count)
+{
+	_ra_build()
+	local lanes = rules.find("l") != null
+	local brules = lanes ? rules.slice(0, rules.find("l")) : rules
+	if (brules != "") _ra_rules(brules == "y2" ? "y" : brules, brules == "y2" ? 2 : 1)()
+	local pl = player_x(0)
+	if (lanes) _ra_lane_signs(pl, ("lane_bits" in getroottable()) ? ::lane_bits : 10)
+	local corners = [coord3d(6, 6, 0), coord3d(6, 9, 0), coord3d(9, 9, 0), coord3d(9, 6, 0)]
+	foreach (p in corners) debug.watch_lane_passes(p)
+
+	local exits = []
+	foreach (b in _ra_branch_tiles()) {
+		local p = coord3d(b[0], b[1], 0)
+		if ((b[2] == dir.north && b[1] < 6) || (b[2] == dir.west && b[0] < 6) || (b[2] == dir.south && b[1] > 9) || (b[2] == dir.east && b[0] > 9)) {
+			exits.append(p)
+			debug.watch_lane_passes(p)
+		}
+	}
+	local approaches = []
+	foreach (f in _ra_inflows()) approaches.append(f.approach)
+
+	debug.set_game_speed(5)
+	local stop = coord3d(12, 8, 0)
+	local blockers = []
+	if (pattern == "blocked") {
+		ASSERT_EQUAL(command_x(tool_build_station).work(pl, stop, "BusStop"), null)
+	}
+	local buses = []
+	for (local k = 0; k < bus_count; k++) {
+		local stops
+		if (pattern == "ring") stops = k % 2 == 0 ? [0, 3] : [3, 0]
+		else stops = [k % 4, (k + 1) % 4, (k + 2) % 4, (k + 3) % 4]
+		buses.append(_ra_bench_bus(stops))
+		for (local i = 0; i < 25; i++) sleep()
+	}
+	if (pattern == "blocked") {
+		for (local k = 0; k < 4; k++) {
+			blockers.append(_ra_bench_bus([stop, 0], 100))
+			for (local i = 0; i < 40; i++) sleep()
+		}
+	}
+	local cars_added = 0
+	for (local k = 0; k < citycars; k++) {
+		local b = _ra_branch_tiles()[k % 8]
+		try {
+			if (command_x(tool_add_citycar).work(pl, coord3d(b[0], b[1], 0)) == null) cars_added++
+		} catch (e) {}
+		for (local i = 0; i < 10; i++) sleep()
+	}
+
+	local out_of_depot = 0
+	foreach (cnv in buses) {
+		if (!cnv.is_valid()) continue
+		local p = cnv.get_pos()
+		if (!(p.x == RA.depot.x && p.y == RA.depot.y)) out_of_depot++
+	}
+
+	debug.reset_merge_stats()
+	debug.set_merge_stats_enabled(true)
+
+	local t0 = world.get_time().ticks
+	local waits = {}
+	local wait_samples = []
+	local last_total = 0
+	local last_progress = t0
+	local longest_stall = 0
+	local released = -1
+	local recovered = -1
+	local half_total = -1
+
+	local steps = 3000
+	for (local i = 0; i < steps; i++) {
+		sleep()
+		local now = world.get_time().ticks
+		foreach (cnv in buses) {
+			if (!cnv.is_valid()) continue
+			local p = cnv.get_pos()
+			local at = -1
+			foreach (k, a in approaches) {
+				if (a.x == p.x  &&  a.y == p.y) at = k
+			}
+			local id = cnv.id
+			if (at >= 0  &&  cnv.get_speed() == 0) {
+				if (!(id in waits)) waits[id] <- now
+			}
+			else if (id in waits) {
+				wait_samples.append(now - waits[id])
+				delete waits[id]
+			}
+		}
+		local total = 0
+		foreach (p in exits) total += debug.get_lane_passes(p, false) + debug.get_lane_passes(p, true)
+		if (total != last_total) {
+			if (now - last_progress > longest_stall) longest_stall = now - last_progress
+			last_progress = now
+			if (released >= 0  &&  recovered < 0) recovered = now - released
+			last_total = total
+		}
+		if (i == steps / 2) {
+			half_total = total
+			if (pattern == "blocked") {
+				foreach (cnv in blockers) {
+					if (cnv.is_valid()) cnv.change_schedule(pl, schedule_x(wt_road, [schedule_entry_x(RA.loop_ends[0], 0, 0), schedule_entry_x(RA.loop_ends[1], 0, 0)]))
+				}
+				released = now
+			}
+		}
+	}
+	debug.set_merge_stats_enabled(false)
+	local now = world.get_time().ticks
+	local end_stall = now - last_progress
+	if (end_stall > longest_stall) longest_stall = end_stall
+	// waits still running at the end count as samples too
+	foreach (id, s in waits) wait_samples.append(now - s)
+
+	local r = "R " + name + " n=" + bus_count + " out=" + out_of_depot + " ticks=" + (now - t0)
+	r += " total=" + last_total + " first_half=" + half_total + " second_half=" + (last_total - half_total)
+	r += " p95=" + _ra_percentile(wait_samples, 95) + " stall=" + longest_stall + " end_stall=" + end_stall + " recovery=" + recovered
+	foreach (c in ["enter_checks", "enter_time_us", "citycar_checks", "citycar_time_us", "yield_checks", "yield_waits", "yield_time_us", "exit_checks", "exit_waits", "exit_time_us"]) {
+		r += " " + c + "=" + debug.get_merge_stat(c)
+	}
+	// where the buses are at the end: depot tile, stopped in front of each entrance, stopped on the ring, stopped elsewhere
+	local in_depot = 0, at_app = [0, 0, 0, 0], ring_stopped = 0, other_stopped = 0, moving = 0
+	foreach (cnv in buses) {
+		if (!cnv.is_valid()) continue
+		local p = cnv.get_pos()
+		if (p.x == RA.depot.x && p.y == RA.depot.y) { in_depot++; continue }
+		if (cnv.get_speed() != 0) { moving++; continue }
+		local at = -1
+		foreach (k, a in approaches) {
+			if (a.x == p.x  &&  a.y == p.y) at = k
+		}
+		if (at >= 0) at_app[at]++
+		else if (p.x >= 6 && p.x <= 9 && p.y >= 6 && p.y <= 9) ring_stopped++
+		else other_stopped++
+	}
+	r += " end_depot=" + in_depot + " end_moving=" + moving + " end_app=" + at_app[0] + "/" + at_app[1] + "/" + at_app[2] + "/" + at_app[3]
+	r += " end_ring_stopped=" + ring_stopped + " end_other_stopped=" + other_stopped
+	local ring = [0, 0]
+	foreach (p in corners) {
+		ring[0] += debug.get_lane_passes(p, false)
+		ring[1] += debug.get_lane_passes(p, true)
+	}
+	r += " ring_traffic=" + ring[0] + " ring_passing=" + ring[1]
+	print(r)
+}
+
+// pattern x rules at 24 buses (the PR #9 grid)
+function bx_uniform_none()  { _rb("uniform_none", "uniform", 0, "", 24) }
+function bx_uniform_y()     { _rb("uniform_y", "uniform", 0, "y", 24) }
+function bx_uniform_y2()    { _rb("uniform_y2", "uniform", 0, "y2", 24) }
+function bx_uniform_x()     { _rb("uniform_x", "uniform", 0, "x", 24) }
+function bx_uniform_yx()    { _rb("uniform_yx", "uniform", 0, "yx", 24) }
+function bx_ring_none()     { _rb("ring_none", "ring", 0, "", 24) }
+function bx_ring_y()        { _rb("ring_y", "ring", 0, "y", 24) }
+function bx_ring_y2()       { _rb("ring_y2", "ring", 0, "y2", 24) }
+function bx_ring_x()        { _rb("ring_x", "ring", 0, "x", 24) }
+function bx_ring_yx()       { _rb("ring_yx", "ring", 0, "yx", 24) }
+function bx_blocked_none()  { _rb("blocked_none", "blocked", 0, "", 24) }
+function bx_blocked_y()     { _rb("blocked_y", "blocked", 0, "y", 24) }
+function bx_blocked_y2()    { _rb("blocked_y2", "blocked", 0, "y2", 24) }
+function bx_blocked_x()     { _rb("blocked_x", "blocked", 0, "x", 24) }
+function bx_blocked_yx()    { _rb("blocked_yx", "blocked", 0, "yx", 24) }
+function bx_mixed_none()    { _rb("mixed_none", "uniform", 16, "", 24) }
+function bx_mixed_y()       { _rb("mixed_y", "uniform", 16, "y", 24) }
+function bx_mixed_y2()      { _rb("mixed_y2", "uniform", 16, "y2", 24) }
+function bx_mixed_x()       { _rb("mixed_x", "uniform", 16, "x", 24) }
+function bx_mixed_yx()      { _rb("mixed_yx", "uniform", 16, "yx", 24) }
+
+// bus count sweep, uniform pattern
+function bs_none_16() { _rb("sweep_none", "uniform", 0, "", 16) }
+function bs_none_32() { _rb("sweep_none", "uniform", 0, "", 32) }
+function bs_none_48() { _rb("sweep_none", "uniform", 0, "", 48) }
+function bs_none_64() { _rb("sweep_none", "uniform", 0, "", 64) }
+function bs_y_16()    { _rb("sweep_y", "uniform", 0, "y", 16) }
+function bs_y_32()    { _rb("sweep_y", "uniform", 0, "y", 32) }
+function bs_y_48()    { _rb("sweep_y", "uniform", 0, "y", 48) }
+function bs_y_64()    { _rb("sweep_y", "uniform", 0, "y", 64) }
+function bs_x_16()    { _rb("sweep_x", "uniform", 0, "x", 16) }
+function bs_x_32()    { _rb("sweep_x", "uniform", 0, "x", 32) }
+function bs_x_48()    { _rb("sweep_x", "uniform", 0, "x", 48) }
+function bs_x_64()    { _rb("sweep_x", "uniform", 0, "x", 64) }
+function bs_yx_16()   { _rb("sweep_yx", "uniform", 0, "yx", 16) }
+function bs_yx_32()   { _rb("sweep_yx", "uniform", 0, "yx", 32) }
+function bs_yx_48()   { _rb("sweep_yx", "uniform", 0, "yx", 48) }
+function bs_yx_64()   { _rb("sweep_yx", "uniform", 0, "yx", 64) }
+function bs_none_48b() { _rb("sweep_none", "uniform", 0, "", 48) }
+function bs_y_48b()    { _rb("sweep_y", "uniform", 0, "y", 48) }
+function bs_x_48b()    { _rb("sweep_x", "uniform", 0, "x", 48) }
+function bs_yx_48b()   { _rb("sweep_yx", "uniform", 0, "yx", 48) }
+
+// one-way signs on the ring corners with lane affinity bits (2: exits on the traffic lane, 8: straight on, passing lane)
+function _ra_lane_signs(pl, bits)
+{
+	local sign = sign_desc_x.get_available_signs(wt_road).filter(@(i, d) d.is_one_way() && !d.is_traffic_light() && !d.is_private_way())[0]
+	foreach (c in [coord3d(6, 6, 0), coord3d(6, 9, 0), coord3d(9, 9, 0), coord3d(9, 6, 0)]) {
+		local t = tile_x(c.x, c.y, c.z)
+		local dirs = t.get_way_dirs_masked(wt_road)
+		local ok = false
+		for (local k = 0; k < 4 && !ok; k++) {
+			if (k == 0 || tile_x(c.x, c.y, c.z).find_object(mo_roadsign) == null) {
+				ASSERT_EQUAL(command_x.build_sign_at(pl, c, sign), null)
+			}
+			else {
+				command_x.build_sign_at(pl, c, sign)
+			}
+			command_x.set_lane_affinity(pl, c, bits)
+			local rs = tile_x(c.x, c.y, c.z).find_object(mo_roadsign)
+			ok = rs != null && rs.get_lane_affinity() == bits && t.get_way_dirs_masked(wt_road) == dirs
+		}
+		ASSERT_TRUE(ok)
+	}
+}
+
+function bl_ring_none()    { _rb("ring_l", "ring", 0, "l", 24) }
+function bl_ring_x()       { _rb("ring_xl", "ring", 0, "xl", 24) }
+function bl_ring_yx()      { _rb("ring_yxl", "ring", 0, "yxl", 24) }
+function bl_uniform_none() { _rb("uniform_l", "uniform", 0, "l", 24) }
+function bl_mixed_none()   { _rb("mixed_l", "uniform", 16, "l", 24) }
+function bl_blocked_none() { _rb("blocked_l", "blocked", 0, "l", 24) }
+function bl_ring32_none()  { _rb("ring32_l", "ring", 0, "l", 32) }
+function bx_ring32_none()  { _rb("ring32_none", "ring", 0, "", 32) }
+function bl_ring48_none()  { _rb("ring48_l", "ring", 0, "l", 48) }
+function bx_ring48_none()  { _rb("ring48_none", "ring", 0, "", 48) }
+function bl_ring48_x()     { _rb("ring48_xl", "ring", 0, "xl", 48) }
+function bx_ring48_x()     { _rb("ring48_x", "ring", 0, "x", 48) }
+
+function bl8_ring_none()   { ::lane_bits <- 8; _rb("ring_l8", "ring", 0, "l", 24) }
+function bl8_ring32_none() { ::lane_bits <- 8; _rb("ring32_l8", "ring", 0, "l", 32) }
+function bl2_ring_none()   { ::lane_bits <- 2; _rb("ring_l2", "ring", 0, "l", 24) }
+function bl2_ring32_none() { ::lane_bits <- 2; _rb("ring32_l2", "ring", 0, "l", 32) }
