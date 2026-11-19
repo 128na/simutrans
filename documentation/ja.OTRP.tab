@@ -897,21 +897,47 @@ Branch south (down-left)
 Branch west (up-left)
 西（左上）へ分岐
 Y-junction (north, up-right)
-Y字分岐（北寄り・右上）
+Y字分岐（根元が北・右上）
 Y-junction (east, down-right)
-Y字分岐（東寄り・右下）
+Y字分岐（根元が東・右下）
 Y-junction (south, down-left)
-Y字分岐（南寄り・左下）
+Y字分岐（根元が南・左下）
 Y-junction (west, up-left)
-Y字分岐（西寄り・左上）
+Y字分岐（根元が西・左上）
 Crossing (straight left-right)
 十字（左右が直進）
 Crossing (straight up-down)
 十字（上下が直進）
-Double crossover A
-複線渡り線 A
-Double crossover B
-複線渡り線 B
+Crossing without crossover
+渡り線のない十字交差
+Crossover
+渡り線
+Three-way switch (north, up-right)
+三方分岐（根元が北・右上）
+Three-way switch (east, down-right)
+三方分岐（根元が東・右下）
+Three-way switch (south, down-left)
+三方分岐（根元が南・左下）
+Three-way switch (west, up-left)
+三方分岐（根元が西・左上）
+north (up-right)
+北（右上）
+east (down-right)
+東（右下）
+south (down-left)
+南（左下）
+west (up-left)
+西（左上）
+4x2 lane crossing (continues %s)
+4車線×2車線の十字路（%sに続く）
+4x4 lane crossing (continues %s and %s)
+4車線×4車線の十字路（%sと%sに続く）
+Multi-lane crossing, through (%s and %s)
+多車線の十字路・中間（%sと%sに続く）
+Multi-lane crossing, edge (outside %s)
+多車線の十字路・端（外側が%s）
+Multi-lane crossing, inside
+多車線の十字路・内側
 #------その他の翻訳------
 v%d (current version)
 v%d (現在のバージョン)

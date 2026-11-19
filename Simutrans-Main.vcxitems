@@ -454,6 +454,7 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)descriptor\tree_desc.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)descriptor\tunnel_desc.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)descriptor\vehicle_desc.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)descriptor\switch_image.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)descriptor\way_desc.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)descriptor\way_obj_desc.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)descriptor\xref_desc.h" />

@@ -11,6 +11,7 @@
 #include "obj_base_desc.h"
 #include "skin_desc.h"
 #include "../dataobj/ribi.h"
+#include "switch_image.h"
 
 class checksum_t;
 class tool_t;
@@ -243,6 +244,43 @@ public:
 		}
 		const uint16 n = image_list_base_index(season, front) + 2;
 		return get_child<image_list_t>(n)->get_image_id(4+nr);
+	}
+
+	/// image of the junction role @p nr (see switch_image.h); a number below 16 is the standard image of that ribi
+	image_id get_switch_role_image_id(uint8 nr, uint8 season, bool front = false) const
+	{
+		if (front  &&  !front_images) {
+			return IMG_EMPTY;
+		}
+		if(  nr < switch_image::FIRST_ROLE  ) {
+			return get_image_id(nr, season, front);
+		}
+		return get_child<image_list_t>(image_list_base_index(season, front))->get_image_id(nr);
+	}
+
+	/**
+	 * True if the add-on draws junction role @p nr: the image is not empty and not the same
+	 * image as the standard image of that tile shape. Images are compared as loaded image
+	 * objects (identical images are merged while loading), so a server without graphics
+	 * gets the same answer as the clients.
+	 */
+	bool has_switch_role_image(uint8 nr) const
+	{
+		const ribi_t::ribi shape = switch_image::shape_ribi_of_role(nr);
+		if(  shape == ribi_t::none  ||  !switches  ) {
+			return false;
+		}
+		for(  int front = 0;  front < 2;  front++  ) {
+			if(  front  &&  !front_image_lists  ) {
+				break;
+			}
+			image_list_t const* const list = get_child<image_list_t>(image_list_base_index(0, front));
+			image_t const* const role = list->get_image(nr);
+			if(  role  &&  role->imageid != IMG_EMPTY  &&  role != list->get_image(shape)  ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// quick query functions

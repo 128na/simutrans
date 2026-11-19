@@ -32,6 +32,7 @@
 #include "../../dataobj/translator.h"
 #include "../../dataobj/loadsave.h"
 #include "../../descriptor/way_desc.h"
+#include "../../descriptor/switch_image.h"
 #include "../../descriptor/roadsign_desc.h"
 
 #include "../../tpl/slist_tpl.h"
@@ -165,6 +166,8 @@ void weg_t::init()
 	max_wayobj_speed = 0;
 	vehicle_offset = 0;
 	switch_image_override = -1;
+	switch_role = 0;
+	is_ex_image = false;
 }
 
 
@@ -265,11 +268,21 @@ void weg_t::rdwr(loadsave_t *file)
 		file->rdwr_byte(vehicle_offset);
 	}
 	if(  file->get_OTRP_version()>=64  ) {
-		// 0xFF (-1) is automatic selection, 0..2 are the fixed choices
+		// 0xFF (-1) is automatic selection, 0 standard, 16..50 a junction role (switch_image.h).
+		// 1..4 are the choices of the first version, read as the matching role.
 		uint8 override_value = (uint8)switch_image_override;
 		file->rdwr_byte(override_value);
 		if(  file->is_loading()  ) {
-			switch_image_override = override_value <= 4 ? (sint8)override_value : -1;
+			if(  override_value == 0  ||  (override_value >= switch_image::FIRST_ROLE  &&  override_value <= switch_image::LAST_ROLE)  ) {
+				switch_image_override = (sint8)override_value;
+			}
+			else if(  override_value >= 1  &&  override_value <= 4  ) {
+				const uint8 nr = switch_image::from_old_choice( (sint8)override_value, ribi );
+				switch_image_override = nr ? (sint8)nr : -1;
+			}
+			else {
+				switch_image_override = -1;
+			}
 		}
 	}
 }
@@ -470,6 +483,13 @@ void weg_t::rotate90()
 		// horizontal <-> vertical
 		close_diagonal_state ^= 3;
 	}
+	// junction roles are tied to the screen directions (switch_image.h)
+	if(  switch_image_override > 0  ) {
+		switch_image_override = (sint8)switch_image::rotate90( (uint8)switch_image_override );
+	}
+	if(  switch_role  ) {
+		switch_role = switch_image::rotate90( switch_role );
+	}
 }
 
 
@@ -523,34 +543,47 @@ void weg_t::set_images(image_type typ, uint8 ribi, bool snow, bool switch_nw)
 		case image_flat:
 		default:
 			set_is_ex_image(false);
+			switch_role = 0;
 			set_image( desc->get_image_id( ribi, snow ) );
 			set_foreground_image( desc->get_image_id( ribi, snow, true ) );
 			break;
 		case image_slope:
 			set_is_ex_image(false);
+			switch_role = 0;
 			set_image( desc->get_slope_image_id( (slope_t::type)ribi, snow ) );
 			set_foreground_image( desc->get_slope_image_id( (slope_t::type)ribi, snow, true ) );
 			break;
 		case image_switch:
 			set_is_ex_image(false);
+			switch_role = desc->has_switch_image()  &&  switch_image::shape_of(ribi) < 5 ? (switch_nw ? switch_image::SWITCH2 : switch_image::SWITCH1) + switch_image::shape_of(ribi) : 0;
 			set_image( desc->get_switch_image_id(ribi, snow, switch_nw) );
 			set_foreground_image( desc->get_switch_image_id(ribi, snow, switch_nw, true) );
 			break;
 		case image_ex:
 			set_is_ex_image(true);
+			switch_role = desc->has_switch_ex_image()  &&  switch_image::shape_of(ribi) < 5 ? (switch_nw ? 31 : switch_image::Y_JUNCTION) + switch_image::shape_of(ribi) : 0;
 			set_image( desc->get_switch_ex_image_id(ribi, snow, switch_nw) );
 			set_foreground_image( desc->get_switch_ex_image_id(ribi, snow, switch_nw, true) );
 			break;
 		case image_diagonal:
 			set_is_ex_image(false);
+			switch_role = 0;
 			set_image( desc->get_diagonal_image_id(ribi, snow) );
 			set_foreground_image( desc->get_diagonal_image_id(ribi, snow, true) );
 			break;
 		case image_close_diagonal:
 			// here ribi is the close diagonal state (1 or 2)
 			set_is_ex_image(false);
+			switch_role = 0;
 			set_image( desc->get_close_diagonal_image_id(ribi-1, snow) );
 			set_foreground_image( desc->get_close_diagonal_image_id(ribi-1, snow, true) );
+			break;
+		case image_switch_role:
+			// here ribi is the junction role (switch_image.h)
+			set_is_ex_image( ribi >= switch_image::Y_JUNCTION );
+			switch_role = ribi;
+			set_image( desc->get_switch_role_image_id(ribi, snow) );
+			set_foreground_image( desc->get_switch_role_image_id(ribi, snow, true) );
 			break;
 	}
 }
@@ -604,12 +637,9 @@ bool weg_t::check_season(const bool calc_only_season_change)
 		if(  apply_switch_image_override(snow)  ) {
 			return true;
 		}
-		// there might be two states of the switch; remember it when changing seasons
-		if(  image == desc->get_switch_image_id( ribi, old_snow, false )  ) {
-			set_images( image_switch, ribi, snow, false );
-		}
-		else if(  image == desc->get_switch_image_id( ribi, old_snow, true )  ) {
-			set_images( image_switch, ribi, snow, true );
+		// keep the junction role drawn now (automatic or by a reservation)
+		if(  switch_role  ) {
+			set_images( image_switch_role, switch_role, snow );
 		}
 		else {
 			set_images( image_flat, ribi, snow );
@@ -704,7 +734,8 @@ void weg_t::calc_image()
 						// (direction-aware: the leg connected to us, if there are two)
 						if(  weg_t *w=to->get_weg(get_waytype(), ribi_t::backward(ribi_t::nesw[r]))  )  {
 							// and will only change the outcome, if it has a diagonal image ...
-							if(  w->get_desc()->has_diagonal_image()  ) {
+							// ... or is a junction whose image follows its neighbours
+							if(  w->get_desc()->has_diagonal_image()  ||  (w->get_desc()->has_switch_image()  &&  ribi_t::is_threeway(w->get_ribi_unmasked()))  ) {
 								w->calc_image();
 							}
 							// signs and signals there use diagonal images by the shape of
@@ -742,16 +773,10 @@ void weg_t::calc_image()
 				}
 			}
 
-#if COLOUR_DEPTH != 0 && MULTI_THREAD != 0
-			// close diagonals have their own images
-			if(!is_diagonal() && !is_close_diagonal() && desc->has_switch_image()){
-				waytype_t type_name = get_waytype();
-				if(type_name == track_wt){
-					select_switch_image(snow);
-				}
-				else if(type_name == road_wt){
-					select_switch_road_image(snow);
-				}
+#if COLOUR_DEPTH != 0
+			// automatic junction image, the same for all waytypes (close diagonals have their own images)
+			if(  !is_diagonal()  &&  !is_close_diagonal()  &&  desc->has_switch_image()  ) {
+				select_switch_image(snow);
 			}
 #endif
 			// Other image-selection passes above may replace the flat switch image.
@@ -779,12 +804,11 @@ bool weg_t::apply_switch_image_override(bool snow)
 		// automatic, or the add-on has no image for the saved choice
 		return false;
 	}
-	switch(  switch_image_override  ) {
-		case 1: set_images(image_switch, ribi, snow, true); break;
-		case 2: set_images(image_switch, ribi, snow, false); break;
-		case 3: set_images(image_ex, ribi, snow, true); break;
-		case 4: set_images(image_ex, ribi, snow, false); break;
-		default: set_images(image_flat, ribi, snow); break; // standard
+	if(  switch_image_override == switch_image::STANDARD_IMAGE  ) {
+		set_images(image_flat, ribi, snow);
+	}
+	else {
+		set_images(image_switch_role, (uint8)switch_image_override, snow);
 	}
 	return true;
 }
@@ -801,435 +825,151 @@ bool weg_t::is_switch_image_choice_available(sint8 value) const
 	if(  !desc  ||  !is_switch_junction()  ) {
 		return false;
 	}
-	switch(  value  ) {
-		case -1:
-		case 0:
-			return true;
-		case 1:
-		case 2:
-			return desc->has_switch_image()  &&  desc->get_switch_image_id( ribi, 0, value == 1 ) != IMG_EMPTY;
-		case 3:
-		case 4:
-			return desc->has_switch_ex_image()  &&  desc->get_switch_ex_image_id( ribi, 0, value == 3 ) != IMG_EMPTY;
-		default:
-			return false;
+	if(  value == -1  ||  value == switch_image::STANDARD_IMAGE  ) {
+		return true;
 	}
+	return value > 0  &&  switch_image::fits( (uint8)value, get_ribi_unmasked() )  &&  desc->has_switch_role_image( (uint8)value );
 }
 
 
-void weg_t::select_switch_image(bool snow){
-	if(  apply_switch_image_override(snow)  ) {
+// Shows junction role @p nr if the add-on draws it. Returns false (and changes nothing) otherwise.
+bool weg_t::show_switch_role(uint8 nr, bool snow)
+{
+	if(  !desc->has_switch_role_image(nr)  ) {
+		return false;
+	}
+	set_images(image_switch_role, nr, snow);
+	return true;
+}
+
+
+/**
+ * Automatic junction image, the same for all waytypes (OTRP). The rules for T junctions,
+ * Y junctions, three-way switches and the crossover are the rail rules of the KUTA version;
+ * multi-lane crossings follow the junction tiles next to a four-way tile.
+ * Called by calc_image() after the standard image was set; a role the add-on does not draw
+ * leaves the standard image.
+ */
+void weg_t::select_switch_image(bool snow)
+{
+	const waytype_t wt = get_waytype();
+	grund_t *from = welt->lookup(get_pos());
+	if(  !from  ) {
 		return;
 	}
-	if(ribi == ribi_t::northsoutheast){
-		grund_t *from = welt->lookup(get_pos());
-		grund_t *east;
-		if(  from->get_neighbour(east, track_wt, ribi_t::east)  ) {
-			ribi_t::ribi east_ribi = east->get_weg(track_wt)->get_ribi_unmasked();
-			if(east_ribi == ribi_t::northwest){
-				set_images(image_switch, ribi, snow, true);
-				return;
-			}
-			else if(east_ribi == ribi_t::southwest){
-				set_images(image_switch, ribi, snow, false);
-				return;
-			}
-			else if(east_ribi == ribi_t::northsouthwest ){
-				grund_t *north;
-				grund_t *south;
-				grund_t *north_east;
-				grund_t *south_east;
-				if(  from->get_neighbour(north, track_wt, ribi_t::north) && from->get_neighbour(south, track_wt, ribi_t::south)
-						&& east->get_neighbour(north_east, track_wt, ribi_t::north) && east->get_neighbour(south_east, track_wt, ribi_t::south))
-				{
-					ribi_t::ribi north_masked_ribi = north->get_weg(track_wt)->get_ribi_masked();
-					ribi_t::ribi south_masked_ribi = south->get_weg(track_wt)->get_ribi_masked();
-					ribi_t::ribi north_east_masked_ribi = north_east->get_weg(track_wt)->get_ribi_masked();
-					ribi_t::ribi south_east_masked_ribi = south_east->get_weg(track_wt)->get_ribi_masked();
-					if( ((north_masked_ribi & ribi_t::northwest) && (south_east_masked_ribi & ribi_t::southeast) && (south_masked_ribi != ribi_t::north || north_east_masked_ribi != ribi_t::south))
-						|| ((north_masked_ribi & ribi_t::southwest) && (south_east_masked_ribi & ribi_t::northeast) && (south_masked_ribi != ribi_t::south || north_east_masked_ribi != ribi_t::north)) )
-					{
-						set_images(image_switch, ribi, snow, true);
-						return;
-					}
-					else if( ((south_masked_ribi & ribi_t::southwest) && (north_east_masked_ribi & ribi_t::northeast) && (north_masked_ribi != ribi_t::south || south_east_masked_ribi != ribi_t::north))
-						|| ((south_masked_ribi & ribi_t::northwest) && (north_east_masked_ribi & ribi_t::southeast) && (north_masked_ribi != ribi_t::north || south_east_masked_ribi != ribi_t::south)) )
-					{
-						set_images(image_switch, ribi, snow, false);
-						return;
-					}
-				}
-			}
-			else if(desc->has_switch_ex_image() && from->is_use_track_wt_ex_image(ribi_t::backward(ribi))){
-				set_images(image_ex, ribi, snow, false);
-				return;
-			}
-		}
-	}
-	else if(ribi == ribi_t::northsouthwest){
-		grund_t *from = welt->lookup(get_pos());
-		grund_t *west;
-		if(  from->get_neighbour(west, track_wt, ribi_t::west)  ){
-			ribi_t::ribi west_ribi = west->get_weg(track_wt)->get_ribi_unmasked();
-			if(west_ribi == ribi_t::southeast){
-				set_images(image_switch, ribi, snow, true);
-				return;
-			}
-			else if(west_ribi == ribi_t::northeast){
-				set_images(image_switch, ribi, snow, false);
-				return;
-			}
-			else if(west_ribi == ribi_t::northsoutheast){
-				grund_t *north;
-				grund_t *south;
-				grund_t *north_west;
-				grund_t *south_west;
-				if(  from->get_neighbour(north, track_wt, ribi_t::north) && from->get_neighbour(south, track_wt, ribi_t::south)
-						&& west->get_neighbour(north_west, track_wt, ribi_t::north) && west->get_neighbour(south_west, track_wt, ribi_t::south))
-				{
-					ribi_t::ribi north_masked_ribi = north->get_weg(track_wt)->get_ribi_masked();
-					ribi_t::ribi south_masked_ribi = south->get_weg(track_wt)->get_ribi_masked();
-					ribi_t::ribi north_west_masked_ribi = north_west->get_weg(track_wt)->get_ribi_masked();
-					ribi_t::ribi south_west_masked_ribi = south_west->get_weg(track_wt)->get_ribi_masked();
-					if( ((south_masked_ribi & ribi_t::northeast) && (north_west_masked_ribi & ribi_t::southwest) && (north_masked_ribi != ribi_t::north || south_west_masked_ribi != ribi_t::south))
-						|| ((south_masked_ribi & ribi_t::southeast) && (north_west_masked_ribi & ribi_t::northwest) && (north_masked_ribi != ribi_t::south || south_west_masked_ribi != ribi_t::north)) )
-					{
-						set_images(image_switch, ribi, snow, true);
-						return;
-					}
-					else if( ((north_masked_ribi & ribi_t::northeast) && (south_west_masked_ribi & ribi_t::southwest) && (south_masked_ribi != ribi_t::north || north_west_masked_ribi != ribi_t::south))
-						|| ((north_masked_ribi & ribi_t::southeast) && (south_west_masked_ribi & ribi_t::northwest) && (south_masked_ribi != ribi_t::south || north_west_masked_ribi != ribi_t::north)) )
-					{
-						set_images(image_switch, ribi, snow, false);
-						return;
-					}
-				}
-			}
-			else if(desc->has_switch_ex_image() && from->is_use_track_wt_ex_image(ribi_t::backward(ribi))){
-				set_images(image_ex, ribi, snow, false);
-				return;
-			}
-		}
-	}
-	else if(ribi == ribi_t::northeastwest){
-		grund_t *from = welt->lookup(get_pos());
-		grund_t *north;
-		if(  from->get_neighbour(north, track_wt, ribi_t::north)  ){
-			ribi_t::ribi north_ribi = north->get_weg(track_wt)->get_ribi_unmasked();
-			if(north_ribi == ribi_t::southeast){
-				set_images(image_switch, ribi, snow, true);
-				return;
-			}
-			else if(north_ribi == ribi_t::southwest){
-				set_images(image_switch, ribi, snow, false);
-				return;
-			}
-			else if(north_ribi == ribi_t::southeastwest){
-				grund_t *west;
-				grund_t *east;
-				grund_t *north_west;
-				grund_t *north_east;
-				if(  from->get_neighbour(west, track_wt, ribi_t::west) && from->get_neighbour(east, track_wt, ribi_t::east)
-						&& north->get_neighbour(north_west, track_wt, ribi_t::west) && north->get_neighbour(north_east, track_wt, ribi_t::east))
-				{
-					ribi_t::ribi west_masked_ribi = west->get_weg(track_wt)->get_ribi_masked();
-					ribi_t::ribi east_masked_ribi = east->get_weg(track_wt)->get_ribi_masked();
-					ribi_t::ribi north_west_masked_ribi = north_west->get_weg(track_wt)->get_ribi_masked();
-					ribi_t::ribi north_east_masked_ribi = north_east->get_weg(track_wt)->get_ribi_masked();
-					if( ((east_masked_ribi & ribi_t::southwest) && (north_west_masked_ribi & ribi_t::northeast) && (west_masked_ribi != ribi_t::west || north_east_masked_ribi != ribi_t::east))
-						|| ((east_masked_ribi & ribi_t::southeast) && (north_west_masked_ribi & ribi_t::northwest) && (west_masked_ribi != ribi_t::east || north_east_masked_ribi != ribi_t::west)) )
-					{
-						set_images(image_switch, ribi, snow, true);
-						return;
-					}
-					else if( ((west_masked_ribi & ribi_t::southwest) && (north_east_masked_ribi & ribi_t::northeast) && (east_masked_ribi != ribi_t::west || north_west_masked_ribi != ribi_t::east))
-						|| ((west_masked_ribi & ribi_t::southeast) && (north_east_masked_ribi & ribi_t::northwest) && (east_masked_ribi != ribi_t::east || north_west_masked_ribi != ribi_t::west)) )
-					{
-						set_images(image_switch, ribi, snow, false);
-						return;
-					}
-				}
-			}
-			else if(desc->has_switch_ex_image() && from->is_use_track_wt_ex_image(ribi_t::backward(ribi))){
-				set_images(image_ex, ribi, snow, false);
-				return;
-			}
-		}
-	}
-	else if(ribi == ribi_t::southeastwest){
-		grund_t *from = welt->lookup(get_pos());
-		grund_t *south;
-		if(  from->get_neighbour(south, track_wt, ribi_t::south) ){
-			ribi_t::ribi south_ribi = south->get_weg(track_wt)->get_ribi_unmasked();
-			if(south_ribi == ribi_t::northwest){
-				set_images(image_switch, ribi, snow, true);
-				return;
-			}
-			else if(south_ribi == ribi_t::northeast){
-				set_images(image_switch, ribi, snow, false);
-				return;
-			}
-			else if(south_ribi == ribi_t::northeastwest){
-				grund_t *west;
-				grund_t *east;
-				grund_t *south_west;
-				grund_t *south_east;
-				if(  from->get_neighbour(west, track_wt, ribi_t::west) && from->get_neighbour(east, track_wt, ribi_t::east)
-						&& south->get_neighbour(south_west, track_wt, ribi_t::west) && south->get_neighbour(south_east, track_wt, ribi_t::east))
-				{
-					ribi_t::ribi west_masked_ribi = west->get_weg(track_wt)->get_ribi_masked();
-					ribi_t::ribi east_masked_ribi = east->get_weg(track_wt)->get_ribi_masked();
-					ribi_t::ribi south_west_masked_ribi = south_west->get_weg(track_wt)->get_ribi_masked();
-					ribi_t::ribi south_east_masked_ribi = south_east->get_weg(track_wt)->get_ribi_masked();
-					if( ((west_masked_ribi & ribi_t::northwest) && (south_east_masked_ribi & ribi_t::southeast) && (east_masked_ribi != ribi_t::west || south_west_masked_ribi != ribi_t::east))
-						|| ((west_masked_ribi & ribi_t::northeast) && (south_east_masked_ribi & ribi_t::southwest) && (east_masked_ribi != ribi_t::east || south_west_masked_ribi != ribi_t::west)) )
-					{
-						set_images(image_switch, ribi, snow, true);
-						return;
-					}
-					else if( ((east_masked_ribi & ribi_t::northwest) && (south_west_masked_ribi & ribi_t::southeast) && (west_masked_ribi != ribi_t::west || south_east_masked_ribi != ribi_t::east))
-						|| ((east_masked_ribi & ribi_t::northeast) && (south_west_masked_ribi & ribi_t::southwest) && (west_masked_ribi != ribi_t::east || south_east_masked_ribi != ribi_t::west)) )
-					{
-						set_images(image_switch, ribi, snow, false);
-						return;
-					}
-				}
-			}
-			else if(desc->has_switch_ex_image() && from->is_use_track_wt_ex_image(ribi_t::backward(ribi))){
-				set_images(image_ex, ribi, snow, false);
-				return;
-			}
-		}
-	}
-	else if(ribi == ribi_t::all && desc->has_switch_ex_image()){
-		grund_t *from = welt->lookup(get_pos());
-		grund_t *north;
-		grund_t *south;
-		grund_t *west;
-		grund_t *east;
-		if(  from->get_neighbour(north, track_wt, ribi_t::north) && from->get_neighbour(south, track_wt, ribi_t::south)
-		&& from->get_neighbour(west, track_wt, ribi_t::west) && from->get_neighbour(east, track_wt, ribi_t::east))
-		{
-			ribi_t::ribi north_ribi = north->get_weg(track_wt)->get_ribi_unmasked();
-			ribi_t::ribi south_ribi = south->get_weg(track_wt)->get_ribi_unmasked();
-			ribi_t::ribi west_ribi = west->get_weg(track_wt)->get_ribi_unmasked();
-			ribi_t::ribi east_ribi = east->get_weg(track_wt)->get_ribi_unmasked();
-			if(ribi_t::is_bend(north_ribi) && ribi_t::is_bend(south_ribi) && (north_ribi & south_ribi)){
-				set_images(image_ex, (ribi_t::backward(north_ribi) | ribi_t::backward(south_ribi)), snow, true);
-				return;
-			}
-			else if(ribi_t::is_bend(east_ribi) && ribi_t::is_bend(west_ribi) && (east_ribi & west_ribi)){
-				set_images(image_ex, (ribi_t::backward(east_ribi) | ribi_t::backward(west_ribi)), snow, true);
-				return;
-			}
-			ribi_t::ribi north_masked_ribi = north->get_weg(track_wt)->get_ribi_masked();
-			// ribi_t::ribi south_masked_ribi = south->get_weg(get_waytype())->get_ribi_masked();
+	const uint8 shape = switch_image::shape_of(ribi);
 
-			if( east_ribi == ribi_t::northwest && east->get_weg(track_wt)->get_ribi() == ribi_t::west){
+	if(  shape < 4  ) {
+		// T junction: b is the branch, n1/s1 the two ends of the main line. The switch state
+		// is tied to the corners of the screen (see switch_image.h), so which end gives
+		// state 2 depends on the direction of the branch.
+		const ribi_t::ribi b  = ribi_t::reverse_single( ribi_t::backward(ribi) );
+		const ribi_t::ribi n1 = (b == ribi_t::east  ||  b == ribi_t::west) ? ribi_t::rotate90l(b) : ribi_t::rotate90(b);
+		const ribi_t::ribi s1 = ribi_t::reverse_single(n1);
+		const ribi_t::ribi back = ribi_t::reverse_single(b);
+		grund_t *branch;
+		if(  !from->get_neighbour(branch, wt, b)  ) {
+			return;
+		}
+		const ribi_t::ribi branch_ribi = branch->get_weg_ribi_unmasked(wt, back);
+		if(  branch_ribi == (back | n1)  ) {
+			// the branch turns towards n1 on the next tile
+			show_switch_role( switch_image::SWITCH2 + shape, snow );
+			return;
+		}
+		if(  branch_ribi == (back | s1)  ) {
+			show_switch_role( switch_image::SWITCH1 + shape, snow );
+			return;
+		}
+		if(  branch_ribi == (ribi_t::all & ~b)  ) {
+			// facing T junction: a crossover between two parallel lines
+			grund_t *p, *q, *pb, *qb;
+			if(  from->get_neighbour(p, wt, n1)  &&  from->get_neighbour(q, wt, s1)
+				&&  branch->get_neighbour(pb, wt, n1)  &&  branch->get_neighbour(qb, wt, s1)  )
+			{
+				weg_t *wp  = p->get_weg(wt, s1);
+				weg_t *wq  = q->get_weg(wt, n1);
+				weg_t *wpb = pb->get_weg(wt, s1);
+				weg_t *wqb = qb->get_weg(wt, n1);
+				if(  !wp  ||  !wq  ||  !wpb  ||  !wqb  ) {
+					return;
+				}
+				const ribi_t::ribi P = wp->get_ribi_masked(), Q = wq->get_ribi_masked();
+				const ribi_t::ribi PB = wpb->get_ribi_masked(), QB = wqb->get_ribi_masked();
+				if(  ((P & (n1|back))  &&  (QB & (s1|b))  &&  (Q != n1  ||  PB != s1))
+					||  ((P & (s1|back))  &&  (QB & (n1|b))  &&  (Q != s1  ||  PB != n1))  )
+				{
+					show_switch_role( switch_image::SWITCH2 + shape, snow );
+				}
+				else if(  ((Q & (s1|back))  &&  (PB & (n1|b))  &&  (P != s1  ||  QB != n1))
+					||  ((Q & (n1|back))  &&  (PB & (s1|b))  &&  (P != n1  ||  QB != s1))  )
+				{
+					show_switch_role( switch_image::SWITCH1 + shape, snow );
+				}
+			}
+			return;
+		}
+		if(  from->is_use_ex_image(wt, ribi_t::backward(ribi))  ) {
+			// both ends of the main line turn away from the branch
+			show_switch_role( switch_image::Y_JUNCTION + shape, snow );
+		}
+		return;
+	}
+
+	if(  shape == 4  ) {
+		grund_t *nb[4];
+		ribi_t::ribi nb_ribi[4] = { ribi_t::none, ribi_t::none, ribi_t::none, ribi_t::none };
+		uint8 junctions = 0; // neighbours that are junctions themselves
+		for(  uint8 r = 0;  r < 4;  r++  ) {
+			nb[r] = NULL;
+			if(  from->get_neighbour(nb[r], wt, ribi_t::nesw[r])  ) {
+				nb_ribi[r] = nb[r]->get_weg_ribi_unmasked(wt, ribi_t::backward(ribi_t::nesw[r]));
+				if(  ribi_t::is_threeway(nb_ribi[r])  ) {
+					junctions |= ribi_t::nesw[r];
+				}
+			}
+			else {
+				nb[r] = NULL;
+			}
+		}
+		// nesw order: 0 north, 1 east, 2 south, 3 west
+		const ribi_t::ribi north_ribi = nb_ribi[0], east_ribi = nb_ribi[1], south_ribi = nb_ribi[2], west_ribi = nb_ribi[3];
+		if(  nb[0]  &&  nb[1]  &&  nb[2]  &&  nb[3]  ) {
+			// three-way switch: both sides turn to the same side, the trunk is on the other side
+			if(  ribi_t::is_bend(north_ribi)  &&  ribi_t::is_bend(south_ribi)  &&  (north_ribi & south_ribi)  ) {
+				if(  show_switch_role( switch_image::THREE_WAY + switch_image::shape_of( ribi_t::backward(north_ribi) | ribi_t::backward(south_ribi) ), snow )  ) {
+					return;
+				}
+			}
+			else if(  ribi_t::is_bend(east_ribi)  &&  ribi_t::is_bend(west_ribi)  &&  (east_ribi & west_ribi)  ) {
+				if(  show_switch_role( switch_image::THREE_WAY + switch_image::shape_of( ribi_t::backward(east_ribi) | ribi_t::backward(west_ribi) ), snow )  ) {
+					return;
+				}
+			}
+			// crossover of the KUTA version (one direction only)
+			weg_t *east_way = nb[1]->get_weg(wt, ribi_t::west);
+			weg_t *north_way = nb[0]->get_weg(wt, ribi_t::south);
+			if(  east_ribi == ribi_t::northwest  &&  east_way  &&  east_way->get_ribi() == ribi_t::west  &&  north_way  ) {
 				grund_t *southwest;
-				if( west->get_neighbour(southwest, track_wt, ribi_t::south) ){
-					ribi_t::ribi southwest_masked_ribi = southwest->get_weg(track_wt)->get_ribi_masked();
-					if((north_masked_ribi & ribi_t::north) && (southwest_masked_ribi & ribi_t::southwest)){
-						set_images(image_ex, ribi_t::southeastwest, snow, false);
-						west->get_weg(track_wt)->set_images(image_switch, west_ribi, snow, false);
-						return;
+				if(  nb[3]->get_neighbour(southwest, wt, ribi_t::south)  ) {
+					weg_t *southwest_way = southwest->get_weg(wt, ribi_t::north);
+					weg_t *west_way = nb[3]->get_weg(wt, ribi_t::east);
+					if(  southwest_way  &&  west_way  &&  (north_way->get_ribi_masked() & ribi_t::north)  &&  (southwest_way->get_ribi_masked() & ribi_t::southwest)  ) {
+						if(  show_switch_role( switch_image::CROSSOVER, snow )  ) {
+							west_way->set_images(image_switch, west_ribi, snow, false);
+							return;
+						}
 					}
 				}
 			}
-/* 			else if( east_ribi == ribi_t::southwest ){
-				grund_t *northwest;
-				if( west->get_neighbour(northwest, get_waytype(), ribi_t::north) && northwest->get_weg(get_waytype())){
-					ribi_t::ribi northwest_masked_ribi = northwest->get_weg(get_waytype())->get_ribi_masked();
-					if((south_masked_ribi & ribi_t::south) && (northwest_masked_ribi & ribi_t::north)){
-						set_images(image_ex, ribi_t::northeastwest, snow, false);
-						west->get_weg(get_waytype())->set_images(image_switch, west_ribi, snow, true);
-						return;
-					}
-				}
-			} */
+		}
+		if(  junctions  ) {
+			// a crossing of multi-lane ways: the junction tiles next to this one
+			show_switch_role( switch_image::LANE_BASE + junctions, snow );
 		}
 	}
 }
 
-
-void weg_t::select_switch_road_image(bool snow){
-	if(ribi == ribi_t::northsoutheast){
-		grund_t *from = welt->lookup(get_pos());
-		grund_t *east;
-		if( from->get_neighbour(east, road_wt, ribi_t::east) && ribi_t::is_threeway(east->get_weg(road_wt)->get_ribi_unmasked())){
-			grund_t *north;
-			grund_t *south;
-			if( from->get_neighbour(north, road_wt, ribi_t::north) && from->get_neighbour(south, road_wt, ribi_t::south) ){
-				ribi_t::ribi north_ribi = north->get_weg(road_wt)->get_ribi_unmasked();
-				ribi_t::ribi south_ribi = south->get_weg(road_wt)->get_ribi_unmasked();
-				if( !ribi_t::is_threeway(north_ribi) && !ribi_t::is_threeway(south_ribi) ){
-					set_images(image_switch, ribi, snow, false);
-					return;
-				}
-				else if(desc->has_switch_ex_image()){
-					if( !ribi_t::is_threeway(south_ribi) ){
-						set_images(image_ex, ribi, snow, true);
-						return;
-					}
-					else if( !ribi_t::is_threeway(north_ribi) ){
-						set_images(image_ex, ribi, snow, false);
-						return;
-					}
-				}
-			}
-		}
-	}
-	else if(ribi == ribi_t::northsouthwest){
-		grund_t *from = welt->lookup(get_pos());
-		grund_t *west;
-		if( from->get_neighbour(west, road_wt, ribi_t::west) && ribi_t::is_threeway(west->get_weg(road_wt)->get_ribi_unmasked())){
-			grund_t *north;
-			grund_t *south;
-			if( from->get_neighbour(north, road_wt, ribi_t::north) && from->get_neighbour(south, road_wt, ribi_t::south) ){
-				ribi_t::ribi north_ribi = north->get_weg(road_wt)->get_ribi_unmasked();
-				ribi_t::ribi south_ribi = south->get_weg(road_wt)->get_ribi_unmasked();
-				if( !ribi_t::is_threeway(north_ribi) && !ribi_t::is_threeway(south_ribi) ){
-					set_images(image_switch, ribi, snow, false);
-					return;
-				}
-				else if(desc->has_switch_ex_image()){
-					if( !ribi_t::is_threeway(north_ribi) ){
-						set_images(image_ex, ribi, snow, true);
-						return;
-					}
-					else if( !ribi_t::is_threeway(south_ribi) ){
-						set_images(image_ex, ribi, snow, false);
-						return;
-					}
-				}
-			}
-		}
-	}
-	else if(ribi == ribi_t::northeastwest){
-		grund_t *from = welt->lookup(get_pos());
-		grund_t *north;
-		if( from->get_neighbour(north, road_wt, ribi_t::north) && ribi_t::is_threeway(north->get_weg(road_wt)->get_ribi_unmasked())){
-			grund_t *east;
-			grund_t *west;
-			if( from->get_neighbour(east, road_wt, ribi_t::east) && from->get_neighbour(west, road_wt, ribi_t::west) ){
-				ribi_t::ribi east_ribi = east->get_weg(road_wt)->get_ribi_unmasked();
-				ribi_t::ribi west_ribi = west->get_weg(road_wt)->get_ribi_unmasked();
-				if( !ribi_t::is_threeway(east_ribi) && !ribi_t::is_threeway(west_ribi) ){
-					set_images(image_switch, ribi, snow, false);
-					return;
-				}
-				else if(desc->has_switch_ex_image()){
-					if( !ribi_t::is_threeway(west_ribi) ){
-						set_images(image_ex, ribi, snow, true);
-						return;
-					}
-					else if( !ribi_t::is_threeway(east_ribi) ){
-						set_images(image_ex, ribi, snow, false);
-						return;
-					}
-				}
-			}
-		}
-	}
-	else if(ribi == ribi_t::southeastwest){
-		grund_t *from = welt->lookup(get_pos());
-		grund_t *south;
-		grund_t *east;
-		grund_t *west;
-		if(  from->get_neighbour(south, road_wt, ribi_t::south) && from->get_neighbour(east, road_wt, ribi_t::east) && from->get_neighbour(west, road_wt, ribi_t::west)  ){
-			ribi_t::ribi south_ribi = south->get_weg(road_wt)->get_ribi_unmasked();
-			ribi_t::ribi east_ribi = east->get_weg(road_wt)->get_ribi_unmasked();
-			ribi_t::ribi west_ribi = west->get_weg(road_wt)->get_ribi_unmasked();
-			if(south_ribi == ribi_t::all || ribi_t::is_threeway(south_ribi)){
-				if((ribi_t::is_twoway(east_ribi) || ribi_t::is_single(east_ribi)) && (ribi_t::is_twoway(west_ribi) || ribi_t::is_single(west_ribi))){
-					set_images(image_switch, ribi, snow, false);
-					return;
-				}
-				else if(desc->has_switch_ex_image()){
-					if(ribi_t::is_twoway(east_ribi) || ribi_t::is_single(east_ribi)){
-						set_images(image_ex, ribi, snow, true);
-						return;
-					}
-					else if(ribi_t::is_twoway(west_ribi) || ribi_t::is_single(west_ribi)){
-						set_images(image_ex, ribi, snow, false);
-						return;
-					}
-				}
-			}
-		}
-	}
-	else if(ribi == ribi_t::all){
-		grund_t *from = welt->lookup(get_pos());
-		grund_t *north;
-		grund_t *south;
-		grund_t *west;
-		grund_t *east;
-		if(  from->get_neighbour(north, road_wt, ribi_t::north) && from->get_neighbour(south, road_wt, ribi_t::south)
-					&& from->get_neighbour(west, road_wt, ribi_t::west) && from->get_neighbour(east, road_wt, ribi_t::east)){
-			ribi_t::ribi north_ribi = north->get_weg(road_wt)->get_ribi_unmasked();
-			ribi_t::ribi south_ribi = south->get_weg(road_wt)->get_ribi_unmasked();
-			ribi_t::ribi west_ribi = west->get_weg(road_wt)->get_ribi_unmasked();
-			ribi_t::ribi east_ribi = east->get_weg(road_wt)->get_ribi_unmasked();
-			if(desc->has_switch_ex_image()){
-				if( ribi_t::is_threeway(east_ribi) ){
-					if( ribi_t::is_threeway(south_ribi) && !ribi_t::is_threeway(north_ribi) ){
-						set_images(image_switch, ribi, snow, true);
-						return;
-					}
-					else if( ribi_t::is_threeway(north_ribi) && !ribi_t::is_threeway(south_ribi) ){
-						set_images(image_switch, ribi, snow, false);
-						return;
-					}
-					else{
-						set_images(image_switch, ribi_t::northsoutheast, snow, true);
-						return;
-					}
-				}
-				else if ( ribi_t::is_threeway(west_ribi) ){
-					if( ribi_t::is_threeway(north_ribi) && !ribi_t::is_threeway(south_ribi) ){
-						set_images(image_ex, ribi, snow, true);
-						return;
-					}
-					else if( ribi_t::is_threeway(south_ribi) && !ribi_t::is_threeway(north_ribi) ){
-						set_images(image_ex, ribi, snow, false);
-						return;
-					}
-					else{
-						set_images(image_switch, ribi_t::northsouthwest, snow, true);
-						return;
-					}
-				}
-				else if( ribi_t::is_threeway(north_ribi) && !ribi_t::is_threeway(south_ribi) ){
-					set_images(image_switch, ribi_t::northeastwest, snow, true);
-					return;
-				}
-				else if( ribi_t::is_threeway(south_ribi) && !ribi_t::is_threeway(north_ribi) ){
-					set_images(image_switch, ribi_t::southeastwest, snow, true);
-					return;
-				}
-			}
-			else{
-				if( ribi_t::is_threeway(east_ribi) ){
-					set_images(image_switch, ribi_t::northsoutheast, snow, true);
-					return;
-				}
-				else if( ribi_t::is_threeway(west_ribi) ){
-					set_images(image_switch, ribi_t::northsouthwest, snow, true);
-					return;
-				}
-				else if( ribi_t::is_threeway(north_ribi) ){
-					set_images(image_switch, ribi_t::northeastwest, snow, true);
-					return;
-				}
-				else if( ribi_t::is_threeway(south_ribi) ){
-					set_images(image_switch, ribi_t::southeastwest, snow, true);
-					return;
-				}
-			}
-		}
-	}
-	return;
-}
 
 // checks, if this way qualifies as diagonal
 void weg_t::check_diagonal()

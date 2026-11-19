@@ -12,6 +12,7 @@
 #include "../boden/wege/weg.h"
 #include "../simmenu.h"
 #include "../simtool.h"
+#include "../descriptor/switch_image.h"
 
 
 
@@ -61,26 +62,94 @@ grund_info_t::grund_info_t(const grund_t* gr_) :
 /// directions the branch of a T junction turns to (index: N, E, S, W)
 // the view is rotated together with the map, so north is always up-right on the screen
 static const char *const switch_branch_labels[4] = { "Branch north (up-right)", "Branch east (down-right)", "Branch south (down-left)", "Branch west (up-left)" };
+/// Y junctions and three-way switches by the direction of their trunk (index: N, E, S, W)
 static const char *const switch_y_labels[4] = { "Y-junction (north, up-right)", "Y-junction (east, down-right)", "Y-junction (south, down-left)", "Y-junction (west, up-left)" };
+static const char *const switch_three_way_labels[4] = { "Three-way switch (north, up-right)", "Three-way switch (east, down-right)", "Three-way switch (south, down-left)", "Three-way switch (west, up-left)" };
+static const char *const switch_dir_names[4] = { "north (up-right)", "east (down-right)", "south (down-left)", "west (up-left)" };
 
 
-/// Label of the fixed choice @p value for a junction with the connections @p ribi.
+/// index N, E, S, W of a single direction
+static int dir_index(ribi_t::ribi dir)
+{
+	switch(  dir  ) {
+		case ribi_t::north: return 0;
+		case ribi_t::east:  return 1;
+		case ribi_t::south: return 2;
+		default:            return 3;
+	}
+}
+
+
+/// Label of a multi-lane crossing: @p mask are the neighbouring junction tiles.
+static const char *lane_crossing_label(uint8 mask)
+{
+	static char labels[16][256];
+	char *buf = labels[mask & 15];
+	const char *d[4];
+	int n = 0;
+	for(  int i = 0;  i < 4;  i++  ) {
+		if(  mask & ribi_t::nesw[i]  ) {
+			d[n++] = translator::translate(switch_dir_names[i]);
+		}
+	}
+	if(  n == 1  ) {
+		sprintf(buf, translator::translate("4x2 lane crossing (continues %s)"), d[0]);
+	}
+	else if(  n == 2  &&  ribi_t::is_bend(mask)  ) {
+		sprintf(buf, translator::translate("4x4 lane crossing (continues %s and %s)"), d[0], d[1]);
+	}
+	else if(  n == 2  ) {
+		sprintf(buf, translator::translate("Multi-lane crossing, through (%s and %s)"), d[0], d[1]);
+	}
+	else if(  n == 3  ) {
+		const ribi_t::ribi outside = ribi_t::all & ~mask;
+		sprintf(buf, translator::translate("Multi-lane crossing, edge (outside %s)"), translator::translate(switch_dir_names[dir_index(outside)]));
+	}
+	else {
+		sprintf(buf, "%s", translator::translate("Multi-lane crossing, inside"));
+	}
+	return buf;
+}
+
+
+/// Label of the fixed choice @p value (-1, 0 or a junction role) for a junction with the connections @p ribi.
 static const char *switch_choice_label(uint8 ribi, sint8 value)
 {
 	if(  value < 0  ) {
 		return translator::translate("Auto");
 	}
-	if(  value == 0  ) {
+	if(  value == switch_image::STANDARD_IMAGE  ) {
 		return translator::translate("Standard");
 	}
+	const uint8 nr = (uint8)value;
 	if(  ribi == ribi_t::all  ) {
-		static const char *const labels[4] = { "Crossing (straight left-right)", "Crossing (straight up-down)", "Double crossover A", "Double crossover B" };
-		return translator::translate(labels[value-1]);
+		if(  nr == switch_image::SWITCH2 + 4  ) {
+			return translator::translate("Crossing (straight left-right)");
+		}
+		if(  nr == switch_image::SWITCH1 + 4  ) {
+			return translator::translate("Crossing (straight up-down)");
+		}
+		if(  nr == switch_image::PLAIN_CROSSING  ) {
+			return translator::translate("Crossing without crossover");
+		}
+		if(  nr == switch_image::CROSSOVER  ) {
+			return translator::translate("Crossover");
+		}
+		if(  nr >= switch_image::THREE_WAY  &&  nr < switch_image::CROSSOVER  ) {
+			// trunk on the branch side of the T shape
+			const ribi_t::ribi t = switch_image::ribi_of_shape(nr - switch_image::THREE_WAY);
+			return translator::translate( switch_three_way_labels[ dir_index( ribi_t::reverse_single( ribi_t::backward(t) ) ) ] );
+		}
+		return lane_crossing_label( nr - switch_image::LANE_BASE );
+	}
+	if(  nr >= switch_image::Y_JUNCTION  ) {
+		// the trunk of a Y junction is its branch
+		return translator::translate( switch_y_labels[ dir_index( ribi_t::reverse_single( ribi_t::backward(ribi) ) ) ] );
 	}
 	// Side of the main line the branch of the junction curves to, as drawn inside this tile.
-	// The first state (nw) is the one the automatic selection picks when the neighbour of the
-	// branch curves away; its curve inside the tile joins the branch with the opposite end of
-	// the main line (e.g. nse2 is a south-east curve). The second state uses the other end.
+	// State 2 is the one the automatic selection picks when the neighbour of the branch
+	// curves away; its curve inside the tile joins the branch with the opposite end of the
+	// main line (e.g. nse2 is a south-east curve). State 1 uses the other end.
 	int dir; // index N, E, S, W
 	switch(  ribi  ) {
 		case ribi_t::northsoutheast: dir = 2; break; // south
@@ -88,10 +157,10 @@ static const char *switch_choice_label(uint8 ribi, sint8 value)
 		case ribi_t::northsouthwest: dir = 0; break; // north
 		default:                     dir = 1; break; // south-east-west: east
 	}
-	if(  value == 2  ||  value == 4  ) {
+	if(  nr < switch_image::SWITCH2  ) {
 		dir = (dir+2) & 3;
 	}
-	return translator::translate( value <= 2 ? switch_branch_labels[dir] : switch_y_labels[dir] );
+	return translator::translate( switch_branch_labels[dir] );
 }
 
 
@@ -109,8 +178,8 @@ void grund_info_t::update_switch_image_choice(switch_choice_t &choice)
 		// offer only the choices the add-on has images for
 		choice.list.clear_elements();
 		choice.count = 0;
-		for(  sint8 value = -1;  value <= 4;  value++  ) {
-			if(  way->is_switch_image_choice_available(value)  ) {
+		for(  sint8 value = -1;  value <= switch_image::LAST_ROLE;  value = (value == 0 ? switch_image::FIRST_ROLE : value + 1)  ) {
+			if(  way->is_switch_image_choice_available(value)  &&  choice.count < switch_choice_t::MAX_VALUES  ) {
 				choice.list.new_component<gui_scrolled_list_t::const_text_scrollitem_t>(switch_choice_label(junction_ribi, value), SYSCOL_TEXT);
 				choice.values[choice.count++] = value;
 			}

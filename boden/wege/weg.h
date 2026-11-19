@@ -110,6 +110,9 @@ private:
 
 	bool is_ex_image;
 
+	/// junction role (switch_image.h) drawn now, 0 if none; follows the image, not saved
+	uint8 switch_role;
+
 	/**
 	* close diagonals (two parallel diagonals, every second tile is a fourway tile)
 	* 0=no, 1=northwest+southeast, 2=northeast+southwest
@@ -118,7 +121,7 @@ private:
 
 	uint16 max_wayobj_speed;
 	// -1 selects the automatic junction image. Fixed choices:
-	// 0 = standard, 1/2 = switch image (nw true/false), 3/4 = extended (ex) switch image (nw true/false)
+	// 0 = standard, 16..50 = junction role (image number, see switch_image.h)
 	sint8 switch_image_override;
 
 	/// Changing the connections invalidates a fixed switch image.
@@ -165,7 +168,8 @@ public:
 		image_diagonal,
 		image_switch,
 		image_ex,
-		image_close_diagonal
+		image_close_diagonal,
+		image_switch_role ///< the ribi parameter is the junction role (switch_image.h)
 	};
 
 	/**
@@ -342,11 +346,14 @@ public:
 
 
 	void select_switch_image(bool snow);
-	void select_switch_road_image(bool snow);
+	/// shows junction role @p nr (switch_image.h) if the add-on draws it
+	bool show_switch_role(uint8 nr, bool snow);
+	/// junction role drawn now (switch_image.h), 0 if none
+	uint8 get_switch_role() const { return switch_role; }
 	bool apply_switch_image_override(bool snow);
 	/// true if the way is a junction whose add-on provides switch images, so the image can be fixed
 	bool can_fix_switch_image() const;
-	/// true if the images for the fixed choice @p value (-1..4) exist for this junction
+	/// true if the images for the fixed choice @p value (-1, 0 or a junction role) exist for this junction
 	bool is_switch_image_choice_available(sint8 value) const;
 	bool has_switch_image_override() const { return switch_image_override >= 0; }
 	bool is_switch_junction() const { return ribi_t::is_threeway(get_ribi_unmasked()) && !(is_diagonal() || is_close_diagonal()); }

@@ -41,7 +41,8 @@ protected:
 		const way_desc_t *desc;   // add-on the list was built for
 		uint8 ribi;               // junction shape the list was built for
 		sint8 shown_value;        // last override value shown in the list (-2: not synced)
-		sint8 values[6];          // override value of each list entry
+		enum { MAX_VALUES = 32 }; // auto, standard and the roles of one tile shape (at most 2 + 28)
+		sint8 values[MAX_VALUES]; // override value of each list entry
 		uint8 count;
 		switch_choice_t() : waytype(invalid_wt), desc(NULL), ribi(0), shown_value(-2), count(0) {}
 	};
