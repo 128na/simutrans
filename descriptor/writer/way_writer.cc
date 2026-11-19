@@ -17,16 +17,77 @@
 
 using std::string;
 
+
+/// image of the flat way list @p nr ("image[nse1]" or "image[nse1][season]" if @p season >= 0)
+static string get_flat_image(tabfileobj_t& obj, const char* type, uint8 nr, int season)
+{
+	char buf[64];
+	if(  season < 0  ) {
+		sprintf(buf, "%simage[%s]", type, switch_image::key(nr));
+	}
+	else {
+		sprintf(buf, "%simage[%s][%d]", type, switch_image::key(nr), season);
+	}
+	return obj.get(buf);
+}
+
+
+/**
+ * Number of images in the lists of flat ways: the 16 standard images, and the junction
+ * images up to the highest one in the dat file (OTRP, see switch_image.h).
+ * If there are junction images, at least the 26 images of standard Simutrans are written,
+ * and if there are extended junction images, at least the 36 images older OTRP versions read.
+ */
+static uint8 get_flat_image_count(tabfileobj_t& obj, const char* const* image_type, int first_season, int last_season)
+{
+	uint8 highest = 0;
+	for(  int backtofront = 0;  backtofront < 2;  backtofront++  ) {
+		for(  int season = first_season;  season <= last_season;  season++  ) {
+			for(  uint8 nr = switch_image::FIRST_ROLE;  nr < switch_image::COUNT;  nr++  ) {
+				if(  nr > highest  &&  !get_flat_image(obj, image_type[backtofront], nr, season).empty()  ) {
+					highest = nr;
+				}
+			}
+		}
+	}
+	if(  highest >= switch_image::Y_JUNCTION  ) {
+		return (uint8)max(highest + 1, switch_image::CROSSOVER + 1);
+	}
+	if(  highest >= switch_image::FIRST_ROLE  ) {
+		return (uint8)max(highest + 1, switch_image::Y_JUNCTION);
+	}
+	return 16;
+}
+
+
+/**
+ * Image @p nr of the flat way list. A missing junction image is filled with the standard image
+ * of the tile shape it belongs to, so the game (and older versions, which draw some of these
+ * images on other tiles) never shows an empty image. Identical images are recognized as
+ * "not drawn" by the game.
+ */
+static string get_flat_image_or_standard(tabfileobj_t& obj, const char* type, uint8 nr, int season, uint8 wtyp)
+{
+	string str = get_flat_image(obj, type, nr, season);
+	if(  str.empty()  &&  nr >= switch_image::FIRST_ROLE  ) {
+		ribi_t::ribi shape = switch_image::shape_ribi_of_role(nr);
+		if(  wtyp == road_wt  &&  nr >= switch_image::THREE_WAY  &&  nr < switch_image::CROSSOVER  ) {
+			// older OTRP versions draw these images on T junctions of roads
+			shape = switch_image::ribi_of_shape(nr - switch_image::THREE_WAY);
+		}
+		str = get_flat_image(obj, type, shape, season);
+	}
+	return str;
+}
+
 /**
  * Write a waytype description node
  */
 void way_writer_t::write_obj(FILE* outfp, obj_node_t& parent, tabfileobj_t& obj)
 {
-	static const char* const ribi_codes[26] = {
+	static const char* const ribi_codes[16] = {
 		"-", "n",  "e",  "ne",  "s",  "ns",  "se",  "nse",
 		"w", "nw", "ew", "new", "sw", "nsw", "sew", "nsew",
-		"nse1", "new1", "nsw1", "sew1", "nsew1", // different crossings: northwest/southeast is straight
-		"nse2", "new2", "nsw2", "sew2", "nsew2",
 	};
 	int ribi, slope;
 
@@ -89,18 +150,11 @@ void way_writer_t::write_obj(FILE* outfp, obj_node_t& parent, tabfileobj_t& obj)
 		if (str.empty()) {
 			dbg->fatal("way_writer_t::write_obj", "image with label %s missing", buf);
 		}
+		// standard images and junction images (way images defined without seasons)
+		const uint8 ribinr = get_flat_image_count(obj, image_type, -1, -1);
 		for(int backtofront = 0; backtofront<2; backtofront++) {
-			// way images defined without seasons
-			char buf[40];
-			sprintf(buf, "%simage[new2][0]", image_type[backtofront]);
-			// test for switch images
-			const uint8 ribinr = *(obj.get(buf))==0 ? 16 : 26;
 			for (ribi = 0; ribi < ribinr; ribi++) {
-				char buf[40];
-
-				sprintf(buf, "%simage[%s]", image_type[backtofront], ribi_codes[ribi]);
-				string str = obj.get(buf);
-				keys.append(str);
+				keys.append(get_flat_image_or_standard(obj, image_type[backtofront], ribi, -1, wtyp));
 			}
 			imagelist_writer_t::instance()->write_obj(outfp, node, keys);
 
@@ -153,17 +207,13 @@ void way_writer_t::write_obj(FILE* outfp, obj_node_t& parent, tabfileobj_t& obj)
 		node.write_data_at(outfp, &number_of_seasons, 27, 1);
 		write_head(outfp, node, obj);
 
-		// has switch images for both directions?
-		const uint8 ribinr = *(obj.get("image[new2][0]"))==0 ? 16 : 26;
+		// standard images and junction images
+		const uint8 ribinr = get_flat_image_count(obj, image_type, 0, number_of_seasons);
 
 		for(int backtofront = 0; backtofront<2; backtofront++) {
 			for (uint8 season = 0; season <= number_of_seasons ; season++) {
 				for (ribi = 0; ribi < ribinr; ribi++) {
-					char buf[40];
-
-					sprintf(buf, "%simage[%s][%d]", image_type[backtofront], ribi_codes[ribi], season);
-					string str = obj.get(buf);
-					keys.append(str);
+					keys.append(get_flat_image_or_standard(obj, image_type[backtofront], ribi, season, wtyp));
 				}
 				imagelist_writer_t::instance()->write_obj(outfp, node, keys);
 
