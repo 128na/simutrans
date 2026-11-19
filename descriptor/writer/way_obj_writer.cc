@@ -16,16 +16,34 @@
 
 using std::string;
 
+
+/// image @p nr of the flat list, e.g. "frontimage[nse1]" (@p type is "front" or "back")
+static string get_image(tabfileobj_t& obj, const char* type, uint8 nr)
+{
+	char buf[64];
+	sprintf(buf, "%simage[%s]", type, switch_image::key(nr));
+	return obj.get(buf);
+}
+
+
+/// image @p nr, or for a missing junction image the standard image of its tile shape
+static string get_image_or_standard(tabfileobj_t& obj, const char* type, uint8 nr)
+{
+	string str = get_image(obj, type, nr);
+	if(  str.empty()  &&  nr >= switch_image::FIRST_ROLE  ) {
+		str = get_image(obj, type, switch_image::shape_ribi_of_role(nr));
+	}
+	return str;
+}
+
 /**
  * Write a way object (lamps, overheadwires)
  */
 void way_obj_writer_t::write_obj(FILE* outfp, obj_node_t& parent, tabfileobj_t& obj)
 {
-	static const char* const ribi_codes[26] = {
+	static const char* const ribi_codes[16] = {
 		"-", "n",  "e",  "ne",  "s",  "ns",  "se",  "nse",
 		"w", "nw", "ew", "new", "sw", "nsw", "sew", "nsew",
-		"nse1", "new1", "nsw1", "sew1", "nsew1", // different crossings: northwest/southeast is oneway
-		"nse2", "new2", "nsw2", "sew2", "nsew2",
 	};
 	int ribi, slope;
 
@@ -62,14 +80,20 @@ void way_obj_writer_t::write_obj(FILE* outfp, obj_node_t& parent, tabfileobj_t& 
 	slist_tpl<string> front_list;
 	slist_tpl<string> back_list;
 
-	for (ribi = 0; ribi < lengthof(ribi_codes); ribi++) {
-		char buf[40];
-		sprintf(buf, "frontimage[%s]", ribi_codes[ribi]);
-		string str = obj.get(buf);
-		front_list.append(str);
-		sprintf(buf, "backimage[%s]", ribi_codes[ribi]);
-		string str2 = obj.get(buf);
-		back_list.append(str2);
+	// standard images and junction images (OTRP, see switch_image.h): up to the highest one in
+	// the dat file, at least the 26 images of standard Simutrans, and at least 36 if there are
+	// extended junction images. A missing junction image is filled with the standard image of
+	// the tile shape it belongs to.
+	uint8 highest = 0;
+	for(  uint8 nr = switch_image::FIRST_ROLE;  nr < switch_image::COUNT;  nr++  ) {
+		if(  !get_image(obj, "front", nr).empty()  ||  !get_image(obj, "back", nr).empty()  ) {
+			highest = nr;
+		}
+	}
+	const int count = highest >= switch_image::Y_JUNCTION ? max(highest + 1, switch_image::CROSSOVER + 1) : (int)switch_image::Y_JUNCTION;
+	for(  ribi = 0;  ribi < count;  ribi++  ) {
+		front_list.append( get_image_or_standard(obj, "front", (uint8)ribi) );
+		back_list.append( get_image_or_standard(obj, "back", (uint8)ribi) );
 	}
 	imagelist_writer_t::instance()->write_obj(outfp, node, front_list);
 	imagelist_writer_t::instance()->write_obj(outfp, node, back_list);
