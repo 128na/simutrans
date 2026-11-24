@@ -272,8 +272,8 @@ void settings_routing_stats_t::init(settings_t const* const sets)
 	ni_coverage_targets.append( numinp.back() );
 	INIT_NUM( "allow_merge_distant_halt", sets->get_allow_merge_distant_halt(), 0, 0x7FFFFFFFul, gui_numberinput_t::POWER2, false );
 	SEPERATOR
-	INIT_NUM( "max_route_steps", sets->get_max_route_steps(), 0, 0x7FFFFFFFul, gui_numberinput_t::POWER2, false );
-	INIT_NUM( "max_choose_route_steps", sets->get_max_choose_route_steps(), 0, 0x7FFFFFFFul, gui_numberinput_t::POWER2, false );
+	INIT_NUM( "max_route_steps", sets->get_max_route_steps(), 1, 0x7FFFFFFFul, gui_numberinput_t::POWER2, false );
+	INIT_NUM( "max_choose_route_steps", sets->get_max_choose_route_steps(), 1, 0x7FFFFFFFul, gui_numberinput_t::POWER2, false );
 	INIT_NUM( "max_hops", sets->get_max_hops(), 100, 0x7FFFFFFFul, gui_numberinput_t::POWER2, false );
 	INIT_NUM( "max_transfers", sets->get_max_transfers(), 1, 100, gui_numberinput_t::AUTOLINEAR, false );
 	SEPERATOR

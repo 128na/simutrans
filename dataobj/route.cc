@@ -321,6 +321,7 @@ bool route_t::find_route(karte_t *welt, const koord3d start, test_driver_t *tdri
 			    // With entry (backward ribi_from) and exit (nesw[r]) both known, verify that
 			    // a reserved junction tile gr can be co-reserved for this specific transit.
 			    && tdriver->check_transit_tile(gr, tmp->ribi_from, ribi_t::nesw[r])
+			    && step < MAX_STEP // do not overrun nodes[]
 			) {
 				// Skip tiles where detailed_oneway forbids entry from this direction.
 				// Only a sign that governs the way this route runs on is relevant
@@ -653,9 +654,12 @@ bool route_t::intern_calc_route(karte_t *welt, const koord3d ziel, const koord3d
 
 				const uint32 new_f = new_g + dist + turns * 3 + costup;
 
+				if (step >= MAX_STEP) {
+					break; // Do not overrun nodes[]
+				}
+
 				// add new
-				ANode* k = &nodes[step];
-				step ++;
+				ANode* k = &nodes[step++];
 
 				k->parent = tmp;
 				k->gr = to;
